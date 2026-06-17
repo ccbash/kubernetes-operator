@@ -257,6 +257,16 @@ func (r *HTTPRouteReconciler) reconcileProxyServices(ctx context.Context, hr *gw
 		return err
 	}
 
+	// Resolve the private-service access groups (by name/id/ref) to NetBird
+	// group IDs once for the route; the same set applies to every hostname.
+	var accessGroups []string
+	if refs := accessGroupRefs(policies); len(refs) > 0 {
+		accessGroups, err = netbirdutil.GetGroupIDs(ctx, r.Client, r.Netbird, refs, hr.Namespace)
+		if err != nil {
+			return err
+		}
+	}
+
 	for _, hostname := range hr.Spec.Hostnames {
 		proxyReq := api.ServiceRequest{
 			Domain:           string(hostname),
@@ -268,6 +278,9 @@ func (r *HTTPRouteReconciler) reconcileProxyServices(ctx context.Context, hr *gw
 			Targets:          &targets,
 		}
 		applyServicePolicies(policies, &proxyReq)
+		if len(accessGroups) > 0 {
+			proxyReq.AccessGroups = &accessGroups
+		}
 
 		// Upsert by domain: update the existing service if one already serves
 		// this hostname, otherwise create it. Falling through to Create after

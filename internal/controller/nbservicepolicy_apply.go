@@ -77,13 +77,24 @@ func applyServicePolicy(s *nbv1alpha1.NBServicePolicySpec, req *api.ServiceReque
 	if s.RewriteRedirects != nil {
 		req.RewriteRedirects = s.RewriteRedirects
 	}
-	if len(s.AccessGroups) > 0 {
-		groups := append([]string(nil), s.AccessGroups...)
-		req.AccessGroups = &groups
-	}
 	if ar := accessRestrictionsFor(s); ar != nil {
 		req.AccessRestrictions = ar
 	}
+}
+
+// accessGroupRefs returns the access-group references for a private service.
+// AccessGroups must be resolved to NetBird group IDs (an API call), so it is
+// handled by the controller rather than the pure applyServicePolicy. Policies
+// are newest-first; the oldest non-empty list wins, matching the per-field
+// precedence of applyServicePolicies.
+func accessGroupRefs(policies []nbv1alpha1.NBServicePolicy) []nbv1alpha1.GroupReference {
+	var refs []nbv1alpha1.GroupReference
+	for i := range policies {
+		if len(policies[i].Spec.AccessGroups) > 0 {
+			refs = policies[i].Spec.AccessGroups
+		}
+	}
+	return refs
 }
 
 // accessRestrictionsFor maps the CRD's restriction fields onto the NetBird API
