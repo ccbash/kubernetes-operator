@@ -10,7 +10,6 @@ import (
 	"github.com/fluxcd/pkg/runtime/patch"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -136,22 +135,13 @@ func (r *HTTPRouteReconciler) reconcileParent(ctx context.Context, logger logr.L
 // Service). When tolerateMissing is set, Services that no longer exist are
 // skipped instead of erroring — used on the delete path.
 func (r *HTTPRouteReconciler) indexBackendServices(ctx context.Context, hr *gwv1.HTTPRoute, tolerateMissing bool) (map[string]corev1.Service, error) {
-	svcIdx := map[string]corev1.Service{}
+	var names []string
 	for _, rule := range hr.Spec.Rules {
 		for _, ref := range rule.BackendRefs {
-			key := client.ObjectKey{Namespace: hr.Namespace, Name: string(ref.Name)}
-			var svc corev1.Service
-			err := r.Client.Get(ctx, key, &svc)
-			if tolerateMissing && kerrors.IsNotFound(err) {
-				continue
-			}
-			if err != nil {
-				return nil, err
-			}
-			svcIdx[svc.Name] = svc
+			names = append(names, string(ref.Name))
 		}
 	}
-	return svcIdx, nil
+	return collectBackendServices(ctx, r.Client, hr.Namespace, names, tolerateMissing)
 }
 
 // resolveRoutingMode folds the attached policies down to a single routing mode
@@ -324,32 +314,8 @@ func (r *HTTPRouteReconciler) reconcileDelete(ctx context.Context, sp *patch.Ser
 			return ctrl.Result{}, err
 		}
 		for _, svc := range svcIdx {
-			netResource := &nbv1alpha1.NetworkResource{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      svc.Name,
-					Namespace: svc.Namespace,
-				},
-			}
-			err = r.Client.Get(ctx, client.ObjectKeyFromObject(netResource), netResource)
-			if err != nil {
+			if err := detachNetworkResource(ctx, r.Client, r.Scheme(), hr, svc); err != nil {
 				return ctrl.Result{}, err
-			}
-			err = controllerutil.RemoveOwnerReference(hr, netResource, r.Scheme())
-			if err != nil {
-				return ctrl.Result{}, err
-			}
-
-			if len(netResource.OwnerReferences) > 1 {
-				err = r.Client.Update(ctx, netResource)
-				if err != nil {
-					return ctrl.Result{}, err
-				}
-			} else {
-				// TODO: Precondition that nothing has changed.
-				err := r.Client.Delete(ctx, netResource)
-				if err != nil {
-					return ctrl.Result{}, err
-				}
 			}
 		}
 
