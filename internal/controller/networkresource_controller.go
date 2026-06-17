@@ -41,7 +41,6 @@ type NetworkResourceReconciler struct {
 // +kubebuilder:rbac:groups=netbird.io,resources=networkresources/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=netbird.io,resources=networkresources/finalizers,verbs=update
 
-// nolint:gocyclo
 func (r *NetworkResourceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	netResource := &nbv1alpha1.NetworkResource{}
 	err := r.Get(ctx, req.NamespacedName, netResource)
@@ -63,30 +62,15 @@ func (r *NetworkResourceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	err = r.Get(ctx, client.ObjectKeyFromObject(svc), svc)
 	if err != nil {
 		if kerrors.IsNotFound(err) {
-			conditions.MarkFalse(netResource, nbv1alpha1.ReadyCondition, nbv1alpha1.DependencyReason, "Referenced Service cannot be found.")
-			err = sp.Patch(ctx, netResource)
-			if err != nil {
-				return ctrl.Result{}, err
-			}
-			return ctrl.Result{}, nil
+			return ctrl.Result{}, r.markNotReady(ctx, sp, netResource, "Referenced Service cannot be found.")
 		}
 		return ctrl.Result{}, err
 	}
 	if svc.Spec.Type != corev1.ServiceTypeClusterIP {
-		conditions.MarkFalse(netResource, nbv1alpha1.ReadyCondition, nbv1alpha1.DependencyReason, "Referenced Service is not of type ClusterIP.")
-		err = sp.Patch(ctx, netResource)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, r.markNotReady(ctx, sp, netResource, "Referenced Service is not of type ClusterIP.")
 	}
 	if svc.Spec.ClusterIP == "" || svc.Spec.ClusterIP == corev1.ClusterIPNone {
-		conditions.MarkFalse(netResource, nbv1alpha1.ReadyCondition, nbv1alpha1.DependencyReason, "Referenced Service does not have a ClusterIP set.")
-		err = sp.Patch(ctx, netResource)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, r.markNotReady(ctx, sp, netResource, "Referenced Service does not have a ClusterIP set.")
 	}
 
 	netRouter := &nbv1alpha1.NetworkRouter{
@@ -98,22 +82,12 @@ func (r *NetworkResourceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	err = r.Get(ctx, client.ObjectKeyFromObject(netRouter), netRouter)
 	if err != nil {
 		if kerrors.IsNotFound(err) {
-			conditions.MarkFalse(netResource, nbv1alpha1.ReadyCondition, nbv1alpha1.DependencyReason, "Referenced NetworkRouter cannot be found.")
-			err = sp.Patch(ctx, netResource)
-			if err != nil {
-				return ctrl.Result{}, err
-			}
-			return ctrl.Result{}, nil
+			return ctrl.Result{}, r.markNotReady(ctx, sp, netResource, "Referenced NetworkRouter cannot be found.")
 		}
 		return ctrl.Result{}, err
 	}
 	if netRouter.Status.NetworkID == "" || netRouter.Status.RoutingPeerID == "" {
-		conditions.MarkFalse(netResource, nbv1alpha1.ReadyCondition, nbv1alpha1.DependencyReason, "Referenced NetworkRouter is not ready.")
-		err = sp.Patch(ctx, netResource)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, r.markNotReady(ctx, sp, netResource, "Referenced NetworkRouter is not ready.")
 	}
 
 	// Inherit the router's resource groups when the NetworkResource doesn't
@@ -149,38 +123,14 @@ func (r *NetworkResourceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	// ClusterIP (ip, the default) or a domain resource at the FQDN (domain).
 	address, desiredType := resourceAddressFor(svc, fqdn, netResource.Spec.RoutingMode)
 
-	resourceID, err := func() (string, error) {
-		netReq := api.NetworkResourceRequest{
-			Name:        string(netResource.UID),
-			Description: new(svc.Name + "/" + svc.Namespace),
-			Address:     address,
-			Enabled:     true,
-			Groups:      groupIDs,
-		}
-		if netResource.Status.ResourceID != "" {
-			netResp, err := r.Netbird.Networks.Resources(netRouter.Status.NetworkID).Update(ctx, netResource.Status.ResourceID, netReq)
-			if err != nil && !netbird.IsNotFound(err) {
-				return "", err
-			}
-			if err == nil {
-				// NetBird derives the resource type from the address but does
-				// not change it on update, so switching routing mode (host<->
-				// domain) leaves a stale type that the proxy target rejects.
-				// Recreate when the live type doesn't match the desired one.
-				if netResp.Type == desiredType {
-					return netResp.Id, nil
-				}
-				if err := r.Netbird.Networks.Resources(netRouter.Status.NetworkID).Delete(ctx, netResource.Status.ResourceID); err != nil && !netbird.IsNotFound(err) {
-					return "", err
-				}
-			}
-		}
-		netResp, err := r.Netbird.Networks.Resources(netRouter.Status.NetworkID).Create(ctx, netReq)
-		if err != nil {
-			return "", err
-		}
-		return netResp.Id, nil
-	}()
+	netReq := api.NetworkResourceRequest{
+		Name:        string(netResource.UID),
+		Description: new(svc.Name + "/" + svc.Namespace),
+		Address:     address,
+		Enabled:     true,
+		Groups:      groupIDs,
+	}
+	resourceID, err := r.upsertResource(ctx, netRouter.Status.NetworkID, netResource.Status.ResourceID, netReq, desiredType)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -203,6 +153,41 @@ func (r *NetworkResourceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{}, nil
+}
+
+// markNotReady records a not-ready dependency condition on the NetworkResource
+// and patches its status.
+func (r *NetworkResourceReconciler) markNotReady(ctx context.Context, sp *patch.SerialPatcher, netResource *nbv1alpha1.NetworkResource, msg string) error {
+	conditions.MarkFalse(netResource, nbv1alpha1.ReadyCondition, nbv1alpha1.DependencyReason, "%s", msg)
+	return sp.Patch(ctx, netResource)
+}
+
+// upsertResource creates or updates the NetBird network resource for netReq,
+// returning its ID. When an existing resource's derived type no longer matches
+// desiredType (the routing mode changed host<->domain), it is recreated: NetBird
+// derives the type from the address but won't change it on update, and the proxy
+// target rejects a stale type.
+func (r *NetworkResourceReconciler) upsertResource(ctx context.Context, networkID, existingID string, netReq api.NetworkResourceRequest, desiredType api.NetworkResourceType) (string, error) {
+	resources := r.Netbird.Networks.Resources(networkID)
+	if existingID != "" {
+		netResp, err := resources.Update(ctx, existingID, netReq)
+		if err != nil && !netbird.IsNotFound(err) {
+			return "", err
+		}
+		if err == nil {
+			if netResp.Type == desiredType {
+				return netResp.Id, nil
+			}
+			if err := resources.Delete(ctx, existingID); err != nil && !netbird.IsNotFound(err) {
+				return "", err
+			}
+		}
+	}
+	netResp, err := resources.Create(ctx, netReq)
+	if err != nil {
+		return "", err
+	}
+	return netResp.Id, nil
 }
 
 // resourceAddressFor returns the NetworkResource address and type for a Service
