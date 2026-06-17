@@ -31,6 +31,7 @@ func (r *GatewayClassReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	ctrl.LoggerFrom(ctx).Info("reconciling gateway class")
 	sp := patch.NewSerialPatcher(gwc, r.Client)
 
 	// Controller name does not match.

@@ -32,6 +32,7 @@ func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	ctrl.LoggerFrom(ctx).Info("reconciling gateway")
 	sp := patch.NewSerialPatcher(gw, r.Client)
 
 	// Check if referenced class belongs to this controller.

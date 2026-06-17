@@ -47,6 +47,7 @@ func (r *NetworkResourceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	ctrl.LoggerFrom(ctx).Info("reconciling network resource")
 	sp := patch.NewSerialPatcher(netResource, r.Client)
 
 	if !netResource.DeletionTimestamp.IsZero() {

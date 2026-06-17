@@ -56,6 +56,7 @@ func (r *NetworkRouterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	ctrl.LoggerFrom(ctx).Info("reconciling network router")
 	sp := patch.NewSerialPatcher(netRouter, r.Client)
 
 	if !netRouter.DeletionTimestamp.IsZero() {
@@ -383,13 +384,18 @@ func (r *NetworkRouterReconciler) upsertNetwork(ctx context.Context, netRouter *
 		Name: netRouter.Name,
 	}
 	if netRouter.Status.NetworkID != "" {
-		networkResp, err := r.Netbird.Networks.Update(ctx, netRouter.Status.NetworkID, networkReq)
-		if err != nil && !netbird.IsNotFound(err) {
+		_, err := r.Netbird.Networks.Get(ctx, netRouter.Status.NetworkID)
+		switch {
+		case err == nil:
+			networkResp, err := r.Netbird.Networks.Update(ctx, netRouter.Status.NetworkID, networkReq)
+			if err != nil {
+				return "", err
+			}
+			return networkResp.Id, nil
+		case !netbird.IsNotFound(err):
 			return "", err
 		}
-		if err == nil {
-			return networkResp.Id, nil
-		}
+		// Not found (deleted out of band) — fall through to create.
 	}
 	networkResp, err := r.Netbird.Networks.Create(ctx, networkReq)
 	if err != nil {
@@ -409,13 +415,18 @@ func (r *NetworkRouterReconciler) upsertRoutingPeer(ctx context.Context, network
 	}
 	routers := r.Netbird.Networks.Routers(networkID)
 	if existingID != "" {
-		resp, err := routers.Update(ctx, existingID, routerReq)
-		if err != nil && !netbird.IsNotFound(err) {
+		_, err := routers.Get(ctx, existingID)
+		switch {
+		case err == nil:
+			resp, err := routers.Update(ctx, existingID, routerReq)
+			if err != nil {
+				return "", err
+			}
+			return resp.Id, nil
+		case !netbird.IsNotFound(err):
 			return "", err
 		}
-		if err == nil {
-			return resp.Id, nil
-		}
+		// Not found (deleted out of band) — fall through to create.
 	}
 	resp, err := routers.Create(ctx, routerReq)
 	if err != nil {
@@ -454,15 +465,18 @@ func (r *NetworkRouterReconciler) reconcileServiceCIDRs(ctx context.Context, sp 
 			Groups:      groupIDs,
 		}
 		if id, ok := existing[cidr]; ok {
-			_, err := r.Netbird.Networks.Resources(networkID).Update(ctx, id, req)
-			if err != nil && !netbird.IsNotFound(err) {
-				return err
-			}
-			if err == nil {
+			_, err := r.Netbird.Networks.Resources(networkID).Get(ctx, id)
+			switch {
+			case err == nil:
+				if _, err := r.Netbird.Networks.Resources(networkID).Update(ctx, id, req); err != nil {
+					return err
+				}
 				kept = append(kept, nbv1alpha1.ServiceCIDRResource{CIDR: cidr, ResourceID: id})
 				continue
+			case !netbird.IsNotFound(err):
+				return err
 			}
-			// tracked resource is gone — fall through and recreate it
+			// Tracked resource is gone (deleted out of band) — fall through and recreate it.
 		}
 		resp, err := r.Netbird.Networks.Resources(networkID).Create(ctx, req)
 		if err != nil {

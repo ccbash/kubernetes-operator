@@ -44,6 +44,7 @@ func (r *HTTPRouteReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	logger.Info("reconciling HTTPRoute")
 	sp := patch.NewSerialPatcher(hr, r.Client)
 
 	if !hr.DeletionTimestamp.IsZero() {

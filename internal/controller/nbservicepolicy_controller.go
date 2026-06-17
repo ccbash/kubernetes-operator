@@ -42,6 +42,7 @@ func (r *NBServicePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	if err := r.Get(ctx, req.NamespacedName, policy); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	logger.Info("reconciling service policy")
 	if !policy.DeletionTimestamp.IsZero() {
 		return ctrl.Result{}, nil
 	}

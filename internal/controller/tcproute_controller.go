@@ -33,6 +33,7 @@ func (r *TCPRouteReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	logger.Info("reconciling TCPRoute")
 	sp := patch.NewSerialPatcher(tr, r.Client)
 
 	if !tr.DeletionTimestamp.IsZero() {

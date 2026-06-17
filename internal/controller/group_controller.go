@@ -39,6 +39,8 @@ func (r *GroupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	}
 	sp := patch.NewSerialPatcher(group, r.Client)
 
+	logf.FromContext(ctx).Info("reconciling group")
+
 	if !group.DeletionTimestamp.IsZero() {
 		return r.reconcileDelete(ctx, sp, group)
 	}
