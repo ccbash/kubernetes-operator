@@ -16,9 +16,12 @@ import (
 	nbv1alpha1 "github.com/netbirdio/kubernetes-operator/api/v1alpha1"
 )
 
-// gatewayAPIGroup is the API group of the HTTPRoute targets an NBServicePolicy
-// may attach to.
-const gatewayAPIGroup = "gateway.networking.k8s.io"
+// gatewayAPIGroup and httpRouteKind identify the HTTPRoute targets an
+// NBServicePolicy may attach to.
+const (
+	gatewayAPIGroup = "gateway.networking.k8s.io"
+	httpRouteKind   = "HTTPRoute"
+)
 
 // servicePoliciesFor returns the NBServicePolicies attached to hr, ordered
 // newest-first. Applying them in that order (see applyServicePolicies) lets the
@@ -49,7 +52,7 @@ func (r *HTTPRouteReconciler) servicePoliciesFor(ctx context.Context, hr *gwv1.H
 // guarantees by listing policies in the route's namespace.
 func policyTargetsRoute(p *nbv1alpha1.NBServicePolicy, name string) bool {
 	for _, t := range p.Spec.TargetRefs {
-		if string(t.Group) == gatewayAPIGroup && string(t.Kind) == "HTTPRoute" && string(t.Name) == name {
+		if string(t.Group) == gatewayAPIGroup && string(t.Kind) == httpRouteKind && string(t.Name) == name {
 			return true
 		}
 	}
@@ -126,7 +129,7 @@ func routesForServicePolicy(_ context.Context, obj client.Object) []reconcile.Re
 	}
 	var reqs []reconcile.Request
 	for _, t := range p.Spec.TargetRefs {
-		if string(t.Group) == gatewayAPIGroup && string(t.Kind) == "HTTPRoute" {
+		if string(t.Group) == gatewayAPIGroup && string(t.Kind) == httpRouteKind {
 			reqs = append(reqs, reconcile.Request{
 				NamespacedName: types.NamespacedName{Namespace: p.Namespace, Name: string(t.Name)},
 			})

@@ -29,10 +29,6 @@ import (
 	nbv1alpha1ac "github.com/netbirdio/kubernetes-operator/pkg/applyconfigurations/api/v1alpha1"
 )
 
-const (
-	HTTPRouteFinalizer = "gateway.netbird.io/httproute"
-)
-
 type HTTPRouteReconciler struct {
 	client.Client
 
