@@ -51,7 +51,6 @@ func init() {
 	// +kubebuilder:scaffold:scheme
 }
 
-// nolint:gocyclo
 func main() {
 	// NB Specific flags
 	var (
@@ -164,87 +163,9 @@ func main() {
 		}
 	}
 
-	if len(netbirdAPIKey) > 0 {
-		nbClient := netbird.NewWithOptions(
-			netbird.WithManagementURL(managementURL),
-			netbird.WithBearerToken(netbirdAPIKey),
-			netbird.WithUserAgent(fmt.Sprintf("netbird-operator/%s (%s/%s)", version.BuildVersion(), runtime.GOOS, runtime.GOARCH)),
-		)
-
-		if err := (&controller.SetupKeyReconciler{
-			Client:  mgr.GetClient(),
-			Netbird: nbClient,
-		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "Failed to create controller", "controller", "SetupKey")
-			os.Exit(1)
-		}
-		if err := (&controller.GroupReconciler{
-			Client:  mgr.GetClient(),
-			Netbird: nbClient,
-		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "Failed to create controller", "controller", "Group")
-			os.Exit(1)
-		}
-		if err := (&controller.NetworkRouterReconciler{
-			Client:        mgr.GetClient(),
-			Netbird:       nbClient,
-			ClientImage:   netbirdClientImage,
-			ManagementURL: managementURL,
-		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "Failed to create controller", "controller", "NetworkRouter")
-			os.Exit(1)
-		}
-		if err := (&controller.NetworkResourceReconciler{
-			Client:  mgr.GetClient(),
-			Netbird: nbClient,
-		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "Failed to create controller", "controller", "NetworkResource")
-			os.Exit(1)
-		}
-		if err := (&controller.ClusterProxyReconciler{
-			Client:        mgr.GetClient(),
-			ApiKey:        netbirdAPIKey,
-			ManagementURL: managementURL,
-		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "Failed to create controller", "controller", "ClusterProxy")
-			os.Exit(1)
-		}
-
-		if gatewayAPIEnabled {
-			if err = (&controller.GatewayClassReconciler{
-				Client: mgr.GetClient(),
-			}).SetupWithManager(mgr); err != nil {
-				setupLog.Error(err, "unable to create controller", "controller", "GatewayClass")
-				os.Exit(1)
-			}
-			if err = (&controller.GatewayReconciler{
-				Client: mgr.GetClient(),
-			}).SetupWithManager(mgr); err != nil {
-				setupLog.Error(err, "unable to create controller", "controller", "Gateway")
-				os.Exit(1)
-			}
-			if err = (&controller.HTTPRouteReconciler{
-				Client:  mgr.GetClient(),
-				Netbird: nbClient,
-			}).SetupWithManager(mgr); err != nil {
-				setupLog.Error(err, "unable to create controller", "controller", "HTTPRoute")
-				os.Exit(1)
-			}
-			if err = (&controller.TCPRouteReconciler{
-				Client: mgr.GetClient(),
-			}).SetupWithManager(mgr); err != nil {
-				setupLog.Error(err, "unable to create controller", "controller", "TCPRoute")
-				os.Exit(1)
-			}
-			if err = (&controller.NBServicePolicyReconciler{
-				Client: mgr.GetClient(),
-			}).SetupWithManager(mgr); err != nil {
-				setupLog.Error(err, "unable to create controller", "controller", "NBServicePolicy")
-				os.Exit(1)
-			}
-		}
-	} else {
-		setupLog.Info("netbird API key not provided, ingress capabilities disabled")
+	if err := setupControllers(mgr, netbirdAPIKey, managementURL, netbirdClientImage, gatewayAPIEnabled); err != nil {
+		setupLog.Error(err, "unable to set up controllers")
+		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
 
@@ -274,6 +195,86 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
+}
+
+// setupControllers registers the NetBird controllers that require API access.
+// It is a no-op (with a log line) when no API key is configured.
+func setupControllers(mgr ctrl.Manager, netbirdAPIKey, managementURL, netbirdClientImage string, gatewayAPIEnabled bool) error {
+	if len(netbirdAPIKey) == 0 {
+		setupLog.Info("netbird API key not provided, ingress capabilities disabled")
+		return nil
+	}
+
+	nbClient := netbird.NewWithOptions(
+		netbird.WithManagementURL(managementURL),
+		netbird.WithBearerToken(netbirdAPIKey),
+		netbird.WithUserAgent(fmt.Sprintf("netbird-operator/%s (%s/%s)", version.BuildVersion(), runtime.GOOS, runtime.GOARCH)),
+	)
+
+	if err := (&controller.SetupKeyReconciler{
+		Client:  mgr.GetClient(),
+		Netbird: nbClient,
+	}).SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("setup SetupKey controller: %w", err)
+	}
+	if err := (&controller.GroupReconciler{
+		Client:  mgr.GetClient(),
+		Netbird: nbClient,
+	}).SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("setup Group controller: %w", err)
+	}
+	if err := (&controller.NetworkRouterReconciler{
+		Client:        mgr.GetClient(),
+		Netbird:       nbClient,
+		ClientImage:   netbirdClientImage,
+		ManagementURL: managementURL,
+	}).SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("setup NetworkRouter controller: %w", err)
+	}
+	if err := (&controller.NetworkResourceReconciler{
+		Client:  mgr.GetClient(),
+		Netbird: nbClient,
+	}).SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("setup NetworkResource controller: %w", err)
+	}
+	if err := (&controller.ClusterProxyReconciler{
+		Client:        mgr.GetClient(),
+		ApiKey:        netbirdAPIKey,
+		ManagementURL: managementURL,
+	}).SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("setup ClusterProxy controller: %w", err)
+	}
+
+	if !gatewayAPIEnabled {
+		return nil
+	}
+	if err := (&controller.GatewayClassReconciler{
+		Client: mgr.GetClient(),
+	}).SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("setup GatewayClass controller: %w", err)
+	}
+	if err := (&controller.GatewayReconciler{
+		Client: mgr.GetClient(),
+	}).SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("setup Gateway controller: %w", err)
+	}
+	if err := (&controller.HTTPRouteReconciler{
+		Client:  mgr.GetClient(),
+		Netbird: nbClient,
+	}).SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("setup HTTPRoute controller: %w", err)
+	}
+	if err := (&controller.TCPRouteReconciler{
+		Client: mgr.GetClient(),
+	}).SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("setup TCPRoute controller: %w", err)
+	}
+	if err := (&controller.NBServicePolicyReconciler{
+		Client: mgr.GetClient(),
+	}).SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("setup NBServicePolicy controller: %w", err)
+	}
+	return nil
 }
 
 func getRuntimeNamespace(runtimeNamespace string) (string, error) {
