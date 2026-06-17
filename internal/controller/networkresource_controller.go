@@ -145,11 +145,20 @@ func (r *NetworkResourceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	// ("<svc>.<ns>.<zone>"), which the zone creates but doesn't resolve.
 	fqdn := strings.Join([]string{svc.Name + "-" + svc.Namespace, zone.Domain}, ".")
 
+	// RoutingMode selects how the resource is addressed: a host resource at the
+	// ClusterIP (ip, the default) or a domain resource at the FQDN (domain).
+	address := svc.Spec.ClusterIP
+	desiredType := api.NetworkResourceTypeHost
+	if netResource.Spec.RoutingMode == nbv1alpha1.RoutingModeDomain {
+		address = fqdn
+		desiredType = api.NetworkResourceTypeDomain
+	}
+
 	resourceID, err := func() (string, error) {
 		netReq := api.NetworkResourceRequest{
 			Name:        string(netResource.UID),
 			Description: new(svc.Name + "/" + svc.Namespace),
-			Address:     fqdn,
+			Address:     address,
 			Enabled:     true,
 			Groups:      groupIDs,
 		}
@@ -160,11 +169,10 @@ func (r *NetworkResourceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			}
 			if err == nil {
 				// NetBird derives the resource type from the address but does
-				// not change it on update — a resource created earlier as a host
-				// (ClusterIP) stays host even after switching to an FQDN address,
-				// and a domain proxy target then rejects it. Recreate it in that
-				// case so the type matches the (domain) address.
-				if netResp.Type == api.NetworkResourceTypeDomain {
+				// not change it on update, so switching routing mode (host<->
+				// domain) leaves a stale type that the proxy target rejects.
+				// Recreate when the live type doesn't match the desired one.
+				if netResp.Type == desiredType {
 					return netResp.Id, nil
 				}
 				if err := r.Netbird.Networks.Resources(netRouter.Status.NetworkID).Delete(ctx, netResource.Status.ResourceID); err != nil && !netbird.IsNotFound(err) {

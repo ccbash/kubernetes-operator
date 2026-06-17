@@ -318,6 +318,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `targetRefs` _LocalPolicyTargetReference array_ | TargetRefs identify the HTTPRoute(s) this policy attaches to, following<br />the Gateway API direct policy-attachment pattern (GEP-713). Each target<br />must be an HTTPRoute in the same namespace as the policy. |  | MaxItems: 16 <br />MinItems: 1 <br /> |
+| `routingMode` _[RoutingMode](#routingmode)_ | RoutingMode selects how the targeted route's backends are exposed: "ip"<br />(host resource at the ClusterIP — DNS-independent, IPv4) or "domain" (FQDN<br />domain resource with A/AAAA — dualstack via NetBird DNS). When unset the<br />route defaults to ip. |  | Enum: [ip domain] <br />Optional: \{\} <br /> |
 | `private` _boolean_ | Private, when true, makes the service NetBird-only: inbound peers<br />authenticate via their tunnel identity (no OIDC) and an ACL policy is<br />auto-generated from AccessGroups. Requires an HTTP service. |  | Optional: \{\} <br /> |
 | `accessGroups` _string array_ | AccessGroups are the NetBird group IDs whose peers may reach a private<br />service over the tunnel. Required when Private is true; ignored otherwise. |  | Optional: \{\} <br /> |
 | `crowdsecMode` _[CrowdsecMode](#crowdsecmode)_ | CrowdsecMode sets the CrowdSec IP-reputation handling for the service. |  | Enum: [off observe enforce] <br />Optional: \{\} <br /> |
@@ -380,6 +381,7 @@ _Appears in:_
 | `networkRouterRef` _[CrossNamespaceReference](#crossnamespacereference)_ | NetworkRouterRef is a reference to the network and router where the resource will be created. |  |  |
 | `serviceRef` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#localobjectreference-v1-core)_ | ServiceRef is a reference to the service to expose in the Network. |  |  |
 | `groups` _[GroupReference](#groupreference) array_ | Groups are references to groups that the resource will be a part of. |  | Optional: \{\} <br /> |
+| `routingMode` _[RoutingMode](#routingmode)_ | RoutingMode selects ip (host resource at the ClusterIP) or domain (FQDN<br />domain resource). Defaults to ip. | ip | Enum: [ip domain] <br />Optional: \{\} <br /> |
 
 
 #### NetworkResourceStatus
@@ -464,6 +466,25 @@ _Appears in:_
 | `routingPeerID` _string_ | RoutingPeerID is the id of the created routing peer. |  | Optional: \{\} <br /> |
 | `networkID` _string_ | NetworkID is the id of the network the routing peer was created in. |  | Optional: \{\} <br /> |
 | `serviceCIDRResources` _[ServiceCIDRResource](#servicecidrresource) array_ | ServiceCIDRResources tracks the subnet network resources created for<br />ServiceCIDRs, for idempotent reconcile and cleanup. |  | Optional: \{\} <br /> |
+
+
+#### RoutingMode
+
+_Underlying type:_ _string_
+
+RoutingMode selects how a Service is exposed as a NetBird network resource.
+
+_Validation:_
+- Enum: [ip domain]
+
+_Appears in:_
+- [NBServicePolicySpec](#nbservicepolicyspec)
+- [NetworkResourceSpec](#networkresourcespec)
+
+| Field | Description |
+| --- | --- |
+| `ip` | RoutingModeIP routes the Service's ClusterIP directly: a host resource +<br />host proxy target. DNS-independent; effectively IPv4 (the primary<br />ClusterIP). This is the conservative default.<br /> |
+| `domain` | RoutingModeDomain routes via the Service FQDN: a domain resource + domain<br />proxy target, resolved through NetBird DNS (the A/AAAA records). Supports<br />dualstack but depends on NetBird DNS resolution.<br /> |
 
 
 #### ServiceCIDRResource

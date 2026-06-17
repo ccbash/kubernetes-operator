@@ -7,6 +7,21 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// RoutingMode selects how a Service is exposed as a NetBird network resource.
+// +kubebuilder:validation:Enum=ip;domain
+type RoutingMode string
+
+const (
+	// RoutingModeIP routes the Service's ClusterIP directly: a host resource +
+	// host proxy target. DNS-independent; effectively IPv4 (the primary
+	// ClusterIP). This is the conservative default.
+	RoutingModeIP RoutingMode = "ip"
+	// RoutingModeDomain routes via the Service FQDN: a domain resource + domain
+	// proxy target, resolved through NetBird DNS (the A/AAAA records). Supports
+	// dualstack but depends on NetBird DNS resolution.
+	RoutingModeDomain RoutingMode = "domain"
+)
+
 // NetworkResourceSpec defines the desired state of NetworkResource.
 type NetworkResourceSpec struct {
 	// NetworkRouterRef is a reference to the network and router where the resource will be created.
@@ -19,6 +34,12 @@ type NetworkResourceSpec struct {
 	// Groups are references to groups that the resource will be a part of.
 	// +optional
 	Groups []GroupReference `json:"groups,omitempty"`
+
+	// RoutingMode selects ip (host resource at the ClusterIP) or domain (FQDN
+	// domain resource). Defaults to ip.
+	// +kubebuilder:default=ip
+	// +optional
+	RoutingMode RoutingMode `json:"routingMode,omitempty"`
 }
 
 // NetworkResourceStatus defines the observed state of NetworkResource.

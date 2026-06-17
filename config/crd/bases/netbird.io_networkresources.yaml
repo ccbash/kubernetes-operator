@@ -94,6 +94,15 @@ spec:
                 x-kubernetes-validations:
                 - message: Value is immutable
                   rule: self == oldSelf
+              routingMode:
+                default: ip
+                description: |-
+                  RoutingMode selects ip (host resource at the ClusterIP) or domain (FQDN
+                  domain resource). Defaults to ip.
+                enum:
+                - ip
+                - domain
+                type: string
               serviceRef:
                 description: ServiceRef is a reference to the service to expose in
                   the Network.
