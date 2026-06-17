@@ -44,7 +44,6 @@ func (r *HTTPRouteReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	logger.Info("reconciling HTTPRoute")
 	sp := patch.NewSerialPatcher(hr, r.Client)
 
 	if !hr.DeletionTimestamp.IsZero() {
@@ -87,6 +86,8 @@ func (r *HTTPRouteReconciler) reconcileParent(ctx context.Context, logger logr.L
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+
+	logger.Info("reconciling HTTPRoute", "gateway", gw.Name)
 
 	controllerutil.AddFinalizer(hr, k8sutil.Finalizer("httproute"))
 	if err := sp.Patch(ctx, hr); err != nil {

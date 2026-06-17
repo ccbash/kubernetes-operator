@@ -33,7 +33,6 @@ func (r *TCPRouteReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	logger.Info("reconciling TCPRoute")
 	sp := patch.NewSerialPatcher(tr, r.Client)
 
 	if !tr.DeletionTimestamp.IsZero() {
@@ -67,6 +66,8 @@ func (r *TCPRouteReconciler) reconcileParent(ctx context.Context, logger logr.Lo
 	if err != nil {
 		return err
 	}
+
+	logger.Info("reconciling TCPRoute", "gateway", gw.Name)
 
 	controllerutil.AddFinalizer(tr, k8sutil.Finalizer("tcproute"))
 	if err := sp.Patch(ctx, tr); err != nil {
