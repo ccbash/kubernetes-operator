@@ -86,11 +86,14 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Build and push Helm chart
-        # Publish a prerelease chart so the test build ships its (possibly
-        # changed) CRDs, instead of relying on a released chart's CRDs.
+        # Publish a dev chart so the test build ships its (possibly changed)
+        # CRDs, instead of relying on a released chart's CRDs. Version is a
+        # plain, monotonically increasing 0.0.<run_number> on a dedicated dev
+        # line — so Flux can order it and a HelmRelease pinned to "0.0.x"
+        # always picks the newest dev build (released charts are 0.8.x).
         run: |
           owner="${{ github.repository_owner }}"
-          chart_version="0.0.0-${{ steps.tags.outputs.ref_tag }}"
+          chart_version="0.0.${{ github.run_number }}"
           helm package --app-version "${{ steps.tags.outputs.sha_tag }}" --version "${chart_version}" charts/netbird-operator
           helm push "netbird-operator-${chart_version}.tgz" "oci://ghcr.io/${owner}/helm-charts"
           {
