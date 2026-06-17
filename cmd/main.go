@@ -13,7 +13,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	kruntime "k8s.io/apimachinery/pkg/runtime"
@@ -31,7 +30,6 @@ import (
 
 	netbird "github.com/netbirdio/netbird/shared/management/client/rest"
 
-	nbv1 "github.com/netbirdio/kubernetes-operator/api/v1"
 	nbv1alpha1 "github.com/netbirdio/kubernetes-operator/api/v1alpha1"
 	"github.com/netbirdio/kubernetes-operator/internal/controller"
 	"github.com/netbirdio/kubernetes-operator/internal/version"
@@ -46,7 +44,6 @@ var (
 func init() {
 	kruntimeutil.Must(clientgoscheme.AddToScheme(scheme))
 
-	kruntimeutil.Must(nbv1.AddToScheme(scheme))
 	kruntimeutil.Must(corev1.AddToScheme(scheme))
 	kruntimeutil.Must(gwv1.Install(scheme))
 	kruntimeutil.Must(gwv1alpha2.Install(scheme))
@@ -58,46 +55,16 @@ func init() {
 func main() {
 	// NB Specific flags
 	var (
-		runtimeNamespace             string
-		managementURL                string
-		netbirdClientImage           string
-		clusterName                  string
-		namespacedNetworks           bool
-		clusterDNS                   string
-		netbirdAPIKey                string
-		allowAutomaticPolicyCreation bool
-		defaultLabels                string
-		gatewayAPIEnabled            bool
+		runtimeNamespace   string
+		managementURL      string
+		netbirdClientImage string
+		netbirdAPIKey      string
+		gatewayAPIEnabled  bool
 	)
 	flag.StringVar(&runtimeNamespace, "runtime-namespace", "", "Namespace the controller is running in")
 	flag.StringVar(&managementURL, "netbird-management-url", "https://api.netbird.io", "Management service URL")
 	flag.StringVar(&netbirdClientImage, "netbird-client-image", "", "Image for netbird client container")
-	flag.StringVar(
-		&clusterName,
-		"cluster-name",
-		"kubernetes",
-		"User-friendly name for kubernetes cluster for NetBird resource creation",
-	)
-	flag.BoolVar(
-		&namespacedNetworks,
-		"namespaced-networks",
-		false,
-		"Create NetBird Network per namespace, set to true if a NetworkPolicy exists that would require this",
-	)
-	flag.StringVar(&clusterDNS, "cluster-dns", "svc.cluster.local", "Cluster DNS name")
 	flag.StringVar(&netbirdAPIKey, "netbird-api-key", "", "API key for NetBird API operations")
-	flag.BoolVar(
-		&allowAutomaticPolicyCreation,
-		"allow-automatic-policy-creation",
-		false,
-		"Allow creating NBPolicy resources from annotations on Services",
-	)
-	flag.StringVar(
-		&defaultLabels,
-		"default-labels",
-		"",
-		"Default labels used for all resources, in format key=value,key=value",
-	)
 	flag.BoolVar(&gatewayAPIEnabled, "gateway-api-enabled", false, "When true Gateway API resources will be reconciled.")
 
 	// Controller generic flags
@@ -141,17 +108,6 @@ func main() {
 	}
 	if netbirdClientImage == "" {
 		netbirdClientImage = version.NetbirdClientImage
-	}
-
-	defaultLabelsMap := make(map[string]string)
-	if defaultLabels != "" {
-		for s := range strings.SplitSeq(defaultLabels, ",") {
-			kv := strings.Split(s, "=")
-			if len(kv) != 2 {
-				panic(fmt.Errorf("invalid label format: %s", s))
-			}
-			defaultLabelsMap[kv[0]] = kv[1]
-		}
 	}
 
 	// Setup webhook server.
@@ -201,14 +157,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	nbSetupKeyController := &controller.NBSetupKeyReconciler{
-		Client: mgr.GetClient(),
-	}
-	if err = nbSetupKeyController.SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "NBSetupKey")
-		os.Exit(1)
-	}
-
 	if enableWebhooks {
 		if err = nbwebhookv1.SetupPodWebhookWithManager(mgr, managementURL, netbirdClientImage); err != nil {
 			setupLog.Error(err, "unable to create webhook", "webhook", "Pod")
@@ -222,65 +170,6 @@ func main() {
 			netbird.WithBearerToken(netbirdAPIKey),
 			netbird.WithUserAgent(fmt.Sprintf("netbird-operator/%s (%s/%s)", version.BuildVersion(), runtime.GOOS, runtime.GOARCH)),
 		)
-
-		if err = (&controller.NBRoutingPeerReconciler{
-			Client:             mgr.GetClient(),
-			Netbird:            nbClient,
-			ClientImage:        netbirdClientImage,
-			ClusterName:        clusterName,
-			ManagementURL:      managementURL,
-			NamespacedNetworks: namespacedNetworks,
-			DefaultLabels:      defaultLabelsMap,
-		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create controller", "controller", "NBRoutingPeer")
-			os.Exit(1)
-		}
-
-		if err = (&controller.ServiceReconciler{
-			Client:              mgr.GetClient(),
-			ClusterName:         clusterName,
-			ClusterDNS:          clusterDNS,
-			NamespacedNetworks:  namespacedNetworks,
-			ControllerNamespace: runtimeNamespace,
-			DefaultLabels:       defaultLabelsMap,
-		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create controller", "controller", "Service")
-			os.Exit(1)
-		}
-
-		if err = (&controller.NBResourceReconciler{
-			Client:                       mgr.GetClient(),
-			Netbird:                      nbClient,
-			AllowAutomaticPolicyCreation: allowAutomaticPolicyCreation,
-			ClusterName:                  clusterName,
-			DefaultLabels:                defaultLabelsMap,
-		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create controller", "controller", "NBResource")
-			os.Exit(1)
-		}
-
-		if err = (&controller.NBGroupReconciler{
-			Client:  mgr.GetClient(),
-			Netbird: nbClient,
-		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create controller", "controller", "NBGroup")
-			os.Exit(1)
-		}
-
-		if err = (&controller.NBPolicyReconciler{
-			Client:  mgr.GetClient(),
-			Netbird: nbClient,
-		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create controller", "controller", "NBPolicy")
-			os.Exit(1)
-		}
-
-		if enableWebhooks {
-			if err = nbwebhookv1.SetupNBGroupWebhookWithManager(mgr); err != nil {
-				setupLog.Error(err, "unable to create webhook", "webhook", "NBGroup")
-				os.Exit(1)
-			}
-		}
 
 		if err := (&controller.SetupKeyReconciler{
 			Client:  mgr.GetClient(),
