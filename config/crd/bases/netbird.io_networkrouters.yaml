@@ -63,6 +63,16 @@ spec:
               logLevel:
                 description: Log level for Netbird client.
                 type: string
+              serviceCIDRs:
+                description: |-
+                  ServiceCIDRs are CIDRs routed into the NetBird network as subnet
+                  resources, so that addresses in these ranges (e.g. the cluster's IPv4
+                  and IPv6 Service CIDRs) are reachable through this router's routing
+                  peers. Reverse-proxy targets resolve a Service's DNS name to a ClusterIP
+                  in one of these ranges and route to it via the matching subnet resource.
+                items:
+                  type: string
+                type: array
               workloadOverride:
                 description: WorkloadOverride contains configuration that will override
                   the default workload.
@@ -166,6 +176,25 @@ spec:
               routingPeerID:
                 description: RoutingPeerID is the id of the created routing peer.
                 type: string
+              serviceCIDRResources:
+                description: |-
+                  ServiceCIDRResources tracks the subnet network resources created for
+                  ServiceCIDRs, for idempotent reconcile and cleanup.
+                items:
+                  description: ServiceCIDRResource tracks the NetBird subnet resource
+                    created for a CIDR.
+                  properties:
+                    cidr:
+                      description: CIDR is the routed range.
+                      type: string
+                    resourceID:
+                      description: ResourceID is the NetBird network resource id.
+                      type: string
+                  required:
+                  - cidr
+                  - resourceID
+                  type: object
+                type: array
             type: object
         required:
         - spec

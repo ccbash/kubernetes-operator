@@ -150,12 +150,16 @@ func (r *HTTPRouteReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 						"service", svc.Name, "port", svc.Spec.Ports[0].Port)
 				}
 				targets = append(targets, api.ServiceTarget{
-					Enabled:    true,
-					Path:       path,
-					Port:       backendPortFor(svc, refPort),
-					TargetId:   resourceID[svc.Name],
-					Protocol:   api.ServiceTargetProtocolHttp,
-					TargetType: api.ServiceTargetTargetTypeHost,
+					Enabled:  true,
+					Path:     path,
+					Port:     backendPortFor(svc, refPort),
+					TargetId: resourceID[svc.Name],
+					Protocol: api.ServiceTargetProtocolHttp,
+					// The backend NetworkResource is a domain resource (its
+					// address is the Service FQDN); the proxy resolves it via
+					// NetBird DNS and routes the resulting ClusterIP through the
+					// router's service-CIDR subnet resource.
+					TargetType: api.ServiceTargetTargetTypeDomain,
 				})
 			}
 		}

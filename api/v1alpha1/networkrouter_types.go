@@ -13,6 +13,14 @@ type NetworkRouterSpec struct {
 	// +required
 	DNSZoneRef DNSZoneReference `json:"dnsZoneRef"`
 
+	// ServiceCIDRs are CIDRs routed into the NetBird network as subnet
+	// resources, so that addresses in these ranges (e.g. the cluster's IPv4
+	// and IPv6 Service CIDRs) are reachable through this router's routing
+	// peers. Reverse-proxy targets resolve a Service's DNS name to a ClusterIP
+	// in one of these ranges and route to it via the matching subnet resource.
+	// +optional
+	ServiceCIDRs []string `json:"serviceCIDRs,omitempty"`
+
 	// Netbird client image.
 	// +optional
 	Image string `json:"image,omitempty"`
@@ -74,6 +82,20 @@ type NetworkRouterStatus struct {
 	// NetworkID is the id of the network the routing peer was created in.
 	// +optional
 	NetworkID string `json:"networkID,omitempty"`
+
+	// ServiceCIDRResources tracks the subnet network resources created for
+	// ServiceCIDRs, for idempotent reconcile and cleanup.
+	// +optional
+	ServiceCIDRResources []ServiceCIDRResource `json:"serviceCIDRResources,omitempty"`
+}
+
+// ServiceCIDRResource tracks the NetBird subnet resource created for a CIDR.
+type ServiceCIDRResource struct {
+	// CIDR is the routed range.
+	CIDR string `json:"cidr"`
+
+	// ResourceID is the NetBird network resource id.
+	ResourceID string `json:"resourceID"`
 }
 
 // +kubebuilder:object:root=true

@@ -438,6 +438,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `dnsZoneRef` _[DNSZoneReference](#dnszonereference)_ | DNSZoneRef is a reference to the DNS zone used to create records for resources. |  | Required: \{\} <br /> |
+| `serviceCIDRs` _string array_ | ServiceCIDRs are CIDRs routed into the NetBird network as subnet<br />resources, so that addresses in these ranges (e.g. the cluster's IPv4<br />and IPv6 Service CIDRs) are reachable through this router's routing<br />peers. Reverse-proxy targets resolve a Service's DNS name to a ClusterIP<br />in one of these ranges and route to it via the matching subnet resource. |  | Optional: \{\} <br /> |
 | `image` _string_ | Netbird client image. |  | Optional: \{\} <br /> |
 | `logLevel` _string_ | Log level for Netbird client. |  | Optional: \{\} <br /> |
 | `workloadOverride` _[WorkloadOverride](#workloadoverride)_ | WorkloadOverride contains configuration that will override the default workload. |  | Optional: \{\} <br /> |
@@ -460,6 +461,24 @@ _Appears in:_
 | `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#condition-v1-meta) array_ | Conditions holds the conditions for the NetworkRouter. |  | Optional: \{\} <br /> |
 | `routingPeerID` _string_ | RoutingPeerID is the id of the created routing peer. |  | Optional: \{\} <br /> |
 | `networkID` _string_ | NetworkID is the id of the network the routing peer was created in. |  | Optional: \{\} <br /> |
+| `serviceCIDRResources` _[ServiceCIDRResource](#servicecidrresource) array_ | ServiceCIDRResources tracks the subnet network resources created for<br />ServiceCIDRs, for idempotent reconcile and cleanup. |  | Optional: \{\} <br /> |
+
+
+#### ServiceCIDRResource
+
+
+
+ServiceCIDRResource tracks the NetBird subnet resource created for a CIDR.
+
+
+
+_Appears in:_
+- [NetworkRouterStatus](#networkrouterstatus)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `cidr` _string_ | CIDR is the routed range. |  |  |
+| `resourceID` _string_ | ResourceID is the NetBird network resource id. |  |  |
 
 
 #### SetupKey

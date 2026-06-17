@@ -60,6 +60,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &apiv1alpha1.NetworkRouterSpecApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("NetworkRouterStatus"):
 		return &apiv1alpha1.NetworkRouterStatusApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("ServiceCIDRResource"):
+		return &apiv1alpha1.ServiceCIDRResourceApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("SetupKey"):
 		return &apiv1alpha1.SetupKeyApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("SetupKeySpec"):

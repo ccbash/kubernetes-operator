@@ -123,11 +123,22 @@ func (r *NetworkResourceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	controllerutil.AddFinalizer(netResource, k8sutil.Finalizer("networkresource"))
 
+	// Resolve the DNS zone first: the resource is a *domain* resource whose
+	// address is the Service FQDN (built from the zone's Domain). A reverse-proxy
+	// domain target resolves that FQDN via NetBird DNS (the A/AAAA records below)
+	// to a ClusterIP, which is reachable via the router's service-CIDR subnet
+	// resource. The resource type (domain) is derived by NetBird from the address.
+	zone, err := netbirdutil.GetDNSZoneByName(ctx, r.Netbird, netRouter.Spec.DNSZoneRef.Name)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	fqdn := strings.Join([]string{svc.Name, svc.Namespace, zone.Domain}, ".")
+
 	resourceID, err := func() (string, error) {
 		netReq := api.NetworkResourceRequest{
 			Name:        string(netResource.UID),
 			Description: new(svc.Name + "/" + svc.Namespace),
-			Address:     svc.Spec.ClusterIP,
+			Address:     fqdn,
 			Enabled:     true,
 			Groups:      groupIDs,
 		}
@@ -156,14 +167,8 @@ func (r *NetworkResourceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 
-	// Create DNS records for the resource: an A per IPv4 ClusterIP and an AAAA
-	// per IPv6 ClusterIP. The record name is built from the zone's Domain (the
-	// FQDN), not its Name identifier, so records sit within the zone.
-	zone, err := netbirdutil.GetDNSZoneByName(ctx, r.Netbird, netRouter.Spec.DNSZoneRef.Name)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-	fqdn := strings.Join([]string{svc.Name, svc.Namespace, zone.Domain}, ".")
+	// Publish A/AAAA records for the FQDN: one A per IPv4 ClusterIP and one AAAA
+	// per IPv6 ClusterIP, so the domain target resolves to the backend.
 	if err := r.reconcileDNSRecords(ctx, sp, netResource, zone, fqdn, clusterIPsOf(svc)); err != nil {
 		return ctrl.Result{}, err
 	}
