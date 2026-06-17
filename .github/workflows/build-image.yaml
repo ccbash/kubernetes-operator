@@ -34,6 +34,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
+
       - name: Set up Docker
         uses: docker/setup-docker-action@0234bb73ccb40f0c430b795634f9247e2b5c2d23 #v5.2.0
         with:
@@ -43,16 +44,19 @@ jobs:
                 "containerd-snapshotter": true
               }
             }
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 #v4.1.0
         with:
           driver: docker
+
       - name: Login to GitHub Container Registry
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee #v4.2.0
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Resolve image tags
         id: tags
         run: |
@@ -66,6 +70,7 @@ jobs:
           echo "ref_tag=${ref_tag}" >> "$GITHUB_OUTPUT"
           # Immutable tag for pinning in a HelmRelease.
           echo "sha_tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
       - name: Build and push image
         run: |
           repo="${{ github.repository_owner }}/netbird-operator"
@@ -85,6 +90,7 @@ jobs:
             echo "${REF_IMG}"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Build and push Helm chart
         # Publish a dev chart so the test build ships its (possibly changed)
         # CRDs, instead of relying on a released chart's CRDs. Version is a
@@ -93,7 +99,7 @@ jobs:
         # always picks the newest dev build (released charts are 0.8.x).
         run: |
           owner="${{ github.repository_owner }}"
-          chart_version="0.0.${{ github.run_number }}"
+          chart_version="{{ steps.tags.outputs.ref_tag }}.${{ github.run_number }}"
           helm package --app-version "${{ steps.tags.outputs.sha_tag }}" --version "${chart_version}" charts/netbird-operator
           helm push "netbird-operator-${chart_version}.tgz" "oci://ghcr.io/${owner}/helm-charts"
           {
