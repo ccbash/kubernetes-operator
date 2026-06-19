@@ -23,6 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -70,6 +71,7 @@ func main() {
 	// Controller generic flags
 	var (
 		metricsAddr          string
+		metricsSecure        bool
 		webhookCertPath      string
 		webhookCertName      string
 		webhookCertKey       string
@@ -86,6 +88,9 @@ func main() {
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
+	flag.BoolVar(&metricsSecure, "metrics-secure", true,
+		"Serve metrics over HTTPS and require authentication/authorization (TokenReview/SubjectAccessReview). "+
+			"Set false only for trusted-network HTTP scraping.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
@@ -144,12 +149,20 @@ func main() {
 	}
 	webhookServer := webhook.NewServer(webhook.Options{TLSOpts: []TLSOption{tlsOpt}})
 
+	// Authenticate/authorize metrics scrapers (and serve over HTTPS) unless
+	// explicitly disabled for a trusted-network HTTP setup.
+	metricsOpts := metricsserver.Options{
+		BindAddress:   metricsAddr,
+		SecureServing: metricsSecure,
+	}
+	if metricsSecure {
+		metricsOpts.FilterProvider = filters.WithAuthenticationAndAuthorization
+	}
+
 	// Setup controller manager.
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme: scheme,
-		Metrics: metricsserver.Options{
-			BindAddress: metricsAddr,
-		},
+		Scheme:  scheme,
+		Metrics: metricsOpts,
 		Client: client.Options{
 			FieldOwner: "netbird-operator",
 		},

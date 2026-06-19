@@ -21,7 +21,9 @@ type SetupKeySpec struct {
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="allowExtraDnsLabels is immutable"
 	AllowExtraDnsLabels bool `json:"allowExtraDnsLabels"`
 
-	// Duration sets how long the setup key is valid for.
+	// Duration sets how long the setup key is valid for. When unset (or zero) the
+	// key does not expire — set a duration for time-limited keys. Only minute (m)
+	// and hour (h) units are accepted.
 	// +optional
 	// +kubebuilder:validation:Type=string
 	// +kubebuilder:validation:Pattern="^([0-9]+(\\.[0-9]+)?(m|h))+$"

@@ -23,11 +23,19 @@ webhooks:
   name: mpod-v1.netbird.io
   admissionReviewVersions:
   - v1
-  {{- if .Values.webhook.namespaceSelectors }}
   namespaceSelector:
+    # Never mutate Pods in control-plane / operator namespaces: with a Fail
+    # failurePolicy, a webhook outage there would block critical Pod creation.
     matchExpressions:
-    {{ toYaml .Values.webhook.namespaceSelectors | nindent 4 }}
-  {{ end }}
+    - key: kubernetes.io/metadata.name
+      operator: NotIn
+      values:
+      - kube-system
+      - kube-node-lease
+      - {{ .Release.Namespace }}
+    {{- with .Values.webhook.namespaceSelectors }}
+    {{ toYaml . | nindent 4 }}
+    {{- end }}
   objectSelector:
     matchExpressions:
     - key: app.kubernetes.io/name

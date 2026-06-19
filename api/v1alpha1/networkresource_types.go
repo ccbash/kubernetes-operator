@@ -29,6 +29,10 @@ type NetworkResourceSpec struct {
 	NetworkRouterRef CrossNamespaceReference `json:"networkRouterRef"`
 
 	// ServiceRef is a reference to the service to expose in the Network.
+	// Immutable: re-pointing at a different Service would change the resource's
+	// address/type in place, which the stale-resource drain only handles for
+	// routing-mode changes — create a new NetworkResource instead.
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="Value is immutable"
 	ServiceRef corev1.LocalObjectReference `json:"serviceRef"`
 
 	// Groups are references to groups that the resource will be a part of.

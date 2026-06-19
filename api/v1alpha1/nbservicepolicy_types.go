@@ -53,6 +53,7 @@ type AccessRestrictions struct {
 }
 
 // NBServicePolicySpec defines the desired state of NBServicePolicy.
+// +kubebuilder:validation:XValidation:rule="!has(self.private) || !self.private || (has(self.accessGroups) && self.accessGroups.size() > 0)",message="accessGroups is required when private is true"
 type NBServicePolicySpec struct {
 	// TargetRefs identify the HTTPRoute(s) this policy attaches to, following
 	// the Gateway API direct policy-attachment pattern (GEP-713). Each target

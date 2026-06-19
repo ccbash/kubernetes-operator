@@ -504,7 +504,7 @@ func cidrResourceSuffix(cidr string) string {
 }
 
 func (r *NetworkRouterReconciler) reconcileDelete(ctx context.Context, sp *patch.SerialPatcher, netRouter *nbv1alpha1.NetworkRouter) (ctrl.Result, error) {
-	if netRouter.Status.RoutingPeerID != "" {
+	if netRouter.Status.NetworkID != "" && netRouter.Status.RoutingPeerID != "" {
 		err := r.Netbird.Networks.Routers(netRouter.Status.NetworkID).Delete(ctx, netRouter.Status.RoutingPeerID)
 		if err != nil && !netbird.IsNotFound(err) {
 			return ctrl.Result{}, err

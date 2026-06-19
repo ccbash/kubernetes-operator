@@ -11,6 +11,7 @@ import (
 	"github.com/fluxcd/pkg/runtime/patch"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -239,6 +240,11 @@ func (r *HTTPRouteReconciler) resolveResourceIDs(ctx context.Context, hr *gwv1.H
 			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: hr.Namespace},
 		}
 		if err := r.Client.Get(ctx, client.ObjectKeyFromObject(netResource), netResource); err != nil {
+			// Just applied by ensureNetworkResources; a not-yet-visible resource
+			// is a transient state — requeue rather than error.
+			if kerrors.IsNotFound(err) {
+				return nil, false, nil
+			}
 			return nil, false, err
 		}
 		if !conditions.Has(netResource, nbv1alpha1.ReadyCondition) {
@@ -355,36 +361,29 @@ func (r *HTTPRouteReconciler) reconcileDelete(ctx context.Context, sp *patch.Ser
 		proxyIdx[proxyService.Domain] = proxyService.Id
 	}
 
-	for _, parent := range hr.Spec.ParentRefs {
-		gw, err := gatewayutil.GetParentGateway(ctx, r.Client, parent, hr.Namespace, GatewayControllerName)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		if gw == nil {
+	// Delete the reverse-proxy service for each hostname this route owns. This
+	// runs regardless of whether the parent Gateway still exists — otherwise a
+	// Gateway deleted before its routes would orphan the proxy services on the
+	// NetBird control plane (the finalizer is removed below either way).
+	for _, hostname := range hr.Spec.Hostnames {
+		id, ok := proxyIdx[string(hostname)]
+		if !ok {
 			continue
 		}
-
-		// Detach the route from each backend Service's NetworkResource.
-		svcIdx, err := r.indexBackendServices(ctx, hr, true)
-		if err != nil {
+		if err := r.Netbird.ReverseProxyServices.Delete(ctx, id); err != nil && !netbird.IsNotFound(err) {
 			return ctrl.Result{}, err
 		}
-		for _, svc := range svcIdx {
-			if err := detachNetworkResource(ctx, r.Client, r.Scheme(), hr, svc); err != nil {
-				return ctrl.Result{}, err
-			}
-		}
+	}
 
-		// Remove the target from the proxy service.
-		for _, hostname := range hr.Spec.Hostnames {
-			id, ok := proxyIdx[string(hostname)]
-			if !ok {
-				continue
-			}
-			err = r.Netbird.ReverseProxyServices.Delete(ctx, id)
-			if err != nil && !netbird.IsNotFound(err) {
-				return ctrl.Result{}, err
-			}
+	// Detach the route from each backend Service's NetworkResource, deleting the
+	// resource when this route was its last owner.
+	svcIdx, err := r.indexBackendServices(ctx, hr, true)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	for _, svc := range svcIdx {
+		if err := detachNetworkResource(ctx, r.Client, r.Scheme(), hr, svc); err != nil {
+			return ctrl.Result{}, err
 		}
 	}
 

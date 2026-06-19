@@ -17,6 +17,9 @@ type NetworkResourceSpecApplyConfiguration struct {
 	// NetworkRouterRef is a reference to the network and router where the resource will be created.
 	NetworkRouterRef *CrossNamespaceReferenceApplyConfiguration `json:"networkRouterRef,omitempty"`
 	// ServiceRef is a reference to the service to expose in the Network.
+	// Immutable: re-pointing at a different Service would change the resource's
+	// address/type in place, which the stale-resource drain only handles for
+	// routing-mode changes — create a new NetworkResource instead.
 	ServiceRef *v1.LocalObjectReference `json:"serviceRef,omitempty"`
 	// Groups are references to groups that the resource will be a part of.
 	Groups []GroupReferenceApplyConfiguration `json:"groups,omitempty"`

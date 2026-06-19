@@ -96,7 +96,13 @@ func (r *SetupKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		if err != nil {
 			return false, err
 		}
-		if resp.Key[:5] != string(secret.Data[SetupKeySecretKey])[:5] {
+		// Compare a short prefix to detect a rotated/cleared secret. Guard the
+		// lengths: a NetBird-returned key or a secret emptied out of band can be
+		// shorter than the prefix, and slicing it would panic the worker.
+		const keyPrefixLen = 5
+		storedKey := string(secret.Data[SetupKeySecretKey])
+		if len(resp.Key) < keyPrefixLen || len(storedKey) < keyPrefixLen ||
+			resp.Key[:keyPrefixLen] != storedKey[:keyPrefixLen] {
 			return false, nil
 		}
 

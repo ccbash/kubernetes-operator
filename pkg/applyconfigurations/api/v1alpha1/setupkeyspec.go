@@ -19,7 +19,9 @@ type SetupKeySpecApplyConfiguration struct {
 	Ephemeral *bool `json:"ephemeral,omitempty"`
 	// AllowExtraDnsLabels decides if peers added with the key can have extra DNS labels.
 	AllowExtraDnsLabels *bool `json:"allowExtraDnsLabels,omitempty"`
-	// Duration sets how long the setup key is valid for.
+	// Duration sets how long the setup key is valid for. When unset (or zero) the
+	// key does not expire — set a duration for time-limited keys. Only minute (m)
+	// and hour (h) units are accepted.
 	Duration *v1.Duration `json:"duration,omitempty"`
 	// AutoGroups are groups that will be automatically assigned to peers using setup key.
 	AutoGroups []GroupReferenceApplyConfiguration `json:"autoGroups,omitempty"`

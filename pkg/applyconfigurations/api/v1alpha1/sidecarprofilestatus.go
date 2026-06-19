@@ -13,6 +13,8 @@ import (
 //
 // SidecarProfileStatus defines the observed state of SidecarProfile.
 type SidecarProfileStatusApplyConfiguration struct {
+	// ObservedGeneration is the last reconciled generation.
+	ObservedGeneration *int64 `json:"observedGeneration,omitempty"`
 	// Conditions holds the conditions for the SidecarProfile.
 	Conditions []v1.ConditionApplyConfiguration `json:"conditions,omitempty"`
 }
@@ -21,6 +23,14 @@ type SidecarProfileStatusApplyConfiguration struct {
 // apply.
 func SidecarProfileStatus() *SidecarProfileStatusApplyConfiguration {
 	return &SidecarProfileStatusApplyConfiguration{}
+}
+
+// WithObservedGeneration sets the ObservedGeneration field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the ObservedGeneration field is set to the value of the last call.
+func (b *SidecarProfileStatusApplyConfiguration) WithObservedGeneration(value int64) *SidecarProfileStatusApplyConfiguration {
+	b.ObservedGeneration = &value
+	return b
 }
 
 // WithConditions adds the given value to the Conditions field in the declarative configuration

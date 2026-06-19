@@ -4,6 +4,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -111,6 +112,11 @@ func (r *NetworkResourceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	// to a ClusterIP, which is reachable via the router's service-CIDR subnet
 	// resource. The resource type (domain) is derived by NetBird from the address.
 	zone, err := netbirdutil.GetDNSZoneByName(ctx, r.Netbird, netRouter.Spec.DNSZoneRef.Name)
+	if errors.Is(err, netbirdutil.ErrZoneNotFound) {
+		// The router's DNS zone hasn't been created yet; treat as a not-ready
+		// dependency and retry rather than erroring with a stack trace.
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, r.markNotReady(ctx, sp, netResource, "Referenced NetworkRouter DNS zone does not exist yet.")
+	}
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -425,6 +431,16 @@ func (r *NetworkResourceReconciler) reconcileDelete(ctx context.Context, sp *pat
 		err := r.Netbird.Networks.Resources(netResource.Status.NetworkID).Delete(ctx, netResource.Status.ResourceID)
 		if err != nil && !netbird.IsNotFound(err) {
 			return ctrl.Result{}, err
+		}
+	}
+	// Also delete any resources still draining from a routing-mode switch, so a
+	// resource deleted mid-drain doesn't orphan the old NetBird resource.
+	if netResource.Status.NetworkID != "" {
+		for _, id := range netResource.Status.StaleResourceIDs {
+			err := r.Netbird.Networks.Resources(netResource.Status.NetworkID).Delete(ctx, id)
+			if err != nil && !netbird.IsNotFound(err) {
+				return ctrl.Result{}, err
+			}
 		}
 	}
 	if netResource.Status.DNSZoneID != "" {

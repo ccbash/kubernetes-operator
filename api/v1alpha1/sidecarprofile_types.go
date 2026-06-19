@@ -69,6 +69,10 @@ type ContainerOverride struct {
 
 // SidecarProfileStatus defines the observed state of SidecarProfile.
 type SidecarProfileStatus struct {
+	// ObservedGeneration is the last reconciled generation.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
 	// Conditions holds the conditions for the SidecarProfile.
 	// +listType=map
 	// +listMapKey=type
@@ -79,6 +83,7 @@ type SidecarProfileStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description=""
 
 // SidecarProfile is the Schema for the sidecarprofiles API.
 type SidecarProfile struct {

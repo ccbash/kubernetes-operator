@@ -104,8 +104,11 @@ spec:
                 - domain
                 type: string
               serviceRef:
-                description: ServiceRef is a reference to the service to expose in
-                  the Network.
+                description: |-
+                  ServiceRef is a reference to the service to expose in the Network.
+                  Immutable: re-pointing at a different Service would change the resource's
+                  address/type in place, which the stale-resource drain only handles for
+                  routing-mode changes — create a new NetworkResource instead.
                 properties:
                   name:
                     default: ""
@@ -118,6 +121,9 @@ spec:
                     type: string
                 type: object
                 x-kubernetes-map-type: atomic
+                x-kubernetes-validations:
+                - message: Value is immutable
+                  rule: self == oldSelf
             required:
             - networkRouterRef
             - serviceRef

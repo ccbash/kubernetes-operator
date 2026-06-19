@@ -19,6 +19,9 @@ type NetworkRouterSpec struct {
 	// peers. Reverse-proxy targets resolve a Service's DNS name to a ClusterIP
 	// in one of these ranges and route to it via the matching subnet resource.
 	// +optional
+	// +kubebuilder:validation:MaxItems=64
+	// +kubebuilder:validation:items:MaxLength=43
+	// +kubebuilder:validation:XValidation:rule="self.all(c, isCIDR(c))",message="serviceCIDRs entries must be valid CIDRs"
 	ServiceCIDRs []string `json:"serviceCIDRs,omitempty"`
 
 	// ResourceGroups are the NetBird groups assigned to the resources created
@@ -33,8 +36,9 @@ type NetworkRouterSpec struct {
 	// +optional
 	Image string `json:"image,omitempty"`
 
-	// Log level for Netbird client.
+	// Log level for the Netbird client.
 	// +optional
+	// +kubebuilder:validation:Enum=error;warn;info;debug;trace
 	LogLevel string `json:"logLevel,omitempty"`
 
 	// WorkloadOverride contains configuration that will override the default workload.
@@ -52,23 +56,23 @@ type DNSZoneReference struct {
 type WorkloadOverride struct {
 	// Labels that will be added.
 	// +optional
-	Labels map[string]string `json:"labels"`
+	Labels map[string]string `json:"labels,omitempty"`
 
 	// Annotations that will be added.
 	// +optional
-	Annotations map[string]string `json:"annotations"`
+	Annotations map[string]string `json:"annotations,omitempty"`
 
 	// Replicas sets the amount of client replicas.
 	// +optional
 	// +kubebuilder:default=3
 	// +kubebuilder:validation:Minimum=1
-	Replicas *int32 `json:"replicas"`
+	Replicas *int32 `json:"replicas,omitempty"`
 
 	// PodTemplate overrides the pod template.
 	// +optional
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Schemaless
-	PodTemplate *corev1.PodTemplateSpec `json:"podTemplate"`
+	PodTemplate *corev1.PodTemplateSpec `json:"podTemplate,omitempty"`
 }
 
 // NetworkRouterStatus defines the observed state of NetworkRouter.
