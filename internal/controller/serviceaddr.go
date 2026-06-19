@@ -48,6 +48,15 @@ func familyAddresses(svc *corev1.Service, want []corev1.IPFamily) []familyAddres
 	return out
 }
 
+// addressList extracts the addresses from a slice of familyAddress.
+func addressList(fas []familyAddress) []string {
+	out := make([]string, 0, len(fas))
+	for _, fa := range fas {
+		out = append(out, fa.address)
+	}
+	return out
+}
+
 // ipFamilyOf classifies an IP string as IPv4 or IPv6, or "" when it is not a
 // valid IP.
 func ipFamilyOf(ip string) corev1.IPFamily {

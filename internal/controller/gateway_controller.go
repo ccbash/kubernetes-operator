@@ -9,7 +9,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -286,7 +286,7 @@ func (r *GatewayReconciler) setConditions(ctx context.Context, gw *gwv1.Gateway,
 		},
 	}
 	for _, c := range conds {
-		apimeta.SetStatusCondition(&gw.Status.Conditions, c)
+		meta.SetStatusCondition(&gw.Status.Conditions, c)
 	}
 	return r.Status().Update(ctx, gw)
 }

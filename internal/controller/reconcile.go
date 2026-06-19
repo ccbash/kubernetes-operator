@@ -16,8 +16,6 @@ const (
 	dependencyRetry = 10 * time.Second
 	// gatewayPoll re-checks Gateway/GatewayClass/route readiness.
 	gatewayPoll = 5 * time.Second
-	// backendRetry retries while a backend Service is missing.
-	backendRetry = 30 * time.Second
 	// cleanupRetry retries a deletion blocked because the object is still
 	// referenced (a group in use).
 	cleanupRetry = time.Minute
