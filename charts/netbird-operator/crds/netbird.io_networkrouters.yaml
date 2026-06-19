@@ -61,7 +61,13 @@ spec:
                 description: Netbird client image.
                 type: string
               logLevel:
-                description: Log level for Netbird client.
+                description: Log level for the Netbird client.
+                enum:
+                - error
+                - warn
+                - info
+                - debug
+                - trace
                 type: string
               resourceGroups:
                 description: |-
@@ -106,8 +112,13 @@ spec:
                   peers. Reverse-proxy targets resolve a Service's DNS name to a ClusterIP
                   in one of these ranges and route to it via the matching subnet resource.
                 items:
+                  maxLength: 43
                   type: string
+                maxItems: 64
                 type: array
+                x-kubernetes-validations:
+                - message: serviceCIDRs entries must be valid CIDRs
+                  rule: self.all(c, isCIDR(c))
               workloadOverride:
                 description: WorkloadOverride contains configuration that will override
                   the default workload.

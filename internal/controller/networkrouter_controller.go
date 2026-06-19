@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"maps"
 	"strings"
-	"time"
 
 	"github.com/fluxcd/pkg/runtime/conditions"
 	"github.com/fluxcd/pkg/runtime/patch"
@@ -25,6 +24,7 @@ import (
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
 	metav1ac "k8s.io/client-go/applyconfigurations/meta/v1"
 	policyv1ac "k8s.io/client-go/applyconfigurations/policy/v1"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -44,6 +44,7 @@ type NetworkRouterReconciler struct {
 	Netbird       *netbird.Client
 	ManagementURL string
 	ClientImage   string
+	Recorder      record.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=netbird.io,resources=networkrouters,verbs=get;list;watch;create;update;patch;delete
@@ -56,7 +57,7 @@ func (r *NetworkRouterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	ctrl.LoggerFrom(ctx).Info("reconciling network router")
+	ctrl.LoggerFrom(ctx).V(1).Info("reconciling network router")
 	sp := patch.NewSerialPatcher(netRouter, r.Client)
 
 	if !netRouter.DeletionTimestamp.IsZero() {
@@ -328,7 +329,7 @@ func (r *NetworkRouterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	return ctrl.Result{RequeueAfter: 15 * time.Minute}, nil
+	return ctrl.Result{RequeueAfter: resyncInterval}, nil
 }
 
 // resolveWorkload applies the router's WorkloadOverride: it merges any
@@ -504,7 +505,7 @@ func cidrResourceSuffix(cidr string) string {
 }
 
 func (r *NetworkRouterReconciler) reconcileDelete(ctx context.Context, sp *patch.SerialPatcher, netRouter *nbv1alpha1.NetworkRouter) (ctrl.Result, error) {
-	if netRouter.Status.RoutingPeerID != "" {
+	if netRouter.Status.NetworkID != "" && netRouter.Status.RoutingPeerID != "" {
 		err := r.Netbird.Networks.Routers(netRouter.Status.NetworkID).Delete(ctx, netRouter.Status.RoutingPeerID)
 		if err != nil && !netbird.IsNotFound(err) {
 			return ctrl.Result{}, err
@@ -528,6 +529,7 @@ func (r *NetworkRouterReconciler) reconcileDelete(ctx context.Context, sp *patch
 func (r *NetworkRouterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&nbv1alpha1.NetworkRouter{}).
+		WithLogConstructor(logConstructor(mgr, "NetworkRouter")).
 		Owns(&nbv1alpha1.Group{}).
 		Owns(&nbv1alpha1.SetupKey{}).
 		Owns(&appsv1.Deployment{}).

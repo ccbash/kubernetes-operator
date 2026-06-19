@@ -4,7 +4,6 @@ package controller
 
 import (
 	"context"
-	"time"
 
 	"github.com/fluxcd/pkg/runtime/patch"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -44,7 +43,7 @@ func (r *GatewayClassReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return r.reconcileDelete(ctx, sp, gwc)
 	}
 
-	ctrl.LoggerFrom(ctx).Info("reconciling gateway class")
+	ctrl.LoggerFrom(ctx).V(1).Info("reconciling gateway class")
 
 	// Validate configuration.
 	message := func() string {
@@ -95,7 +94,7 @@ func (r *GatewayClassReconciler) reconcileDelete(ctx context.Context, sp *patch.
 	}
 	for _, gw := range gatewayList.Items {
 		if string(gw.Spec.GatewayClassName) == gwc.ObjectMeta.Name {
-			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+			return ctrl.Result{RequeueAfter: gatewayPoll}, nil
 		}
 	}
 
@@ -111,5 +110,6 @@ func (r *GatewayClassReconciler) reconcileDelete(ctx context.Context, sp *patch.
 func (r *GatewayClassReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&gwv1.GatewayClass{}).
+		WithLogConstructor(logConstructor(mgr, "GatewayClass")).
 		Complete(r)
 }

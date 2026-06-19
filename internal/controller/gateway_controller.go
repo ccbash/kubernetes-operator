@@ -5,7 +5,6 @@ package controller
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/fluxcd/pkg/runtime/conditions"
 	"github.com/fluxcd/pkg/runtime/patch"
@@ -47,7 +46,7 @@ func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, nil
 	}
 	if !meta.IsStatusConditionTrue(gwc.Status.Conditions, string(gwv1.GatewayClassConditionStatusAccepted)) {
-		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+		return ctrl.Result{RequeueAfter: gatewayPoll}, nil
 	}
 
 	// Handle resource deletion (polls for referencing routes; don't log on
@@ -56,7 +55,7 @@ func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return r.reconcileDelete(ctx, sp, gw)
 	}
 
-	ctrl.LoggerFrom(ctx).Info("reconciling gateway")
+	ctrl.LoggerFrom(ctx).V(1).Info("reconciling gateway")
 
 	// Verify Gateway configuration.
 	routingPeerName, err := gatewayutil.GetNetworkRouterName(gw.Spec.Listeners)
@@ -104,7 +103,7 @@ func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		if err != nil {
 			return ctrl.Result{}, err
 		}
-		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+		return ctrl.Result{RequeueAfter: gatewayPoll}, nil
 	}
 
 	// Signal Gateway is programmed.
@@ -143,7 +142,7 @@ func (r *GatewayReconciler) reconcileDelete(ctx context.Context, sp *patch.Seria
 				namespace = string(*ref.Namespace)
 			}
 			if group == gvk.Group && kind == gvk.Kind && namespace == gw.Namespace && string(ref.Name) == gw.Name {
-				return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+				return ctrl.Result{RequeueAfter: gatewayPoll}, nil
 			}
 		}
 	}
@@ -159,5 +158,6 @@ func (r *GatewayReconciler) reconcileDelete(ctx context.Context, sp *patch.Seria
 func (r *GatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&gwv1.Gateway{}).
+		WithLogConstructor(logConstructor(mgr, "Gateway")).
 		Complete(r)
 }

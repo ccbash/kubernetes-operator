@@ -380,7 +380,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `networkRouterRef` _[CrossNamespaceReference](#crossnamespacereference)_ | NetworkRouterRef is a reference to the network and router where the resource will be created. |  |  |
-| `serviceRef` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#localobjectreference-v1-core)_ | ServiceRef is a reference to the service to expose in the Network. |  |  |
+| `serviceRef` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#localobjectreference-v1-core)_ | ServiceRef is a reference to the service to expose in the Network.<br />Immutable: re-pointing at a different Service would change the resource's<br />address/type in place, which the stale-resource drain only handles for<br />routing-mode changes — create a new NetworkResource instead. |  |  |
 | `groups` _[GroupReference](#groupreference) array_ | Groups are references to groups that the resource will be a part of. |  | Optional: \{\} <br /> |
 | `routingMode` _[RoutingMode](#routingmode)_ | RoutingMode selects ip (host resource at the ClusterIP) or domain (FQDN<br />domain resource). Defaults to ip. | ip | Enum: [ip domain] <br />Optional: \{\} <br /> |
 
@@ -402,6 +402,7 @@ _Appears in:_
 | `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#condition-v1-meta) array_ | Conditions holds the conditions for the NetworkResource. |  | Optional: \{\} <br /> |
 | `networkID` _string_ | NetworkID is the id of the network the resource is created in. |  | Optional: \{\} <br /> |
 | `resourceID` _string_ | ResourceID is the id of the created resource. |  | Optional: \{\} <br /> |
+| `staleResourceIDs` _string array_ | StaleResourceIDs are previous NetBird resource IDs left over by a<br />routing-mode change: switching host<->domain recreates the resource under a<br />new type, but the old one cannot be deleted while a reverse-proxy service<br />still targets it. The new resource is created first (it has a different<br />address and name, so the two coexist) and the old IDs are drained here on<br />later reconciles, once the proxy has been repointed at the new resource. |  | Optional: \{\} <br /> |
 | `dnsZoneID` _string_ | DNSZoneID is the id of the zone the DNS record is created in. |  | Optional: \{\} <br /> |
 | `dnsRecordID` _string_ | DNSRecordID is the id of the legacy single A record created before<br />dualstack support. Retained only so it can be cleaned up on upgrade;<br />records are now tracked in DNSRecords. |  | Optional: \{\} <br /> |
 | `dnsRecords` _[DNSRecordStatus](#dnsrecordstatus) array_ | DNSRecords are the DNS records created for the resource — one A record<br />per IPv4 ClusterIP and one AAAA per IPv6 ClusterIP. |  | Optional: \{\} <br /> |
@@ -442,10 +443,10 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `dnsZoneRef` _[DNSZoneReference](#dnszonereference)_ | DNSZoneRef is a reference to the DNS zone used to create records for resources. |  | Required: \{\} <br /> |
-| `serviceCIDRs` _string array_ | ServiceCIDRs are CIDRs routed into the NetBird network as subnet<br />resources, so that addresses in these ranges (e.g. the cluster's IPv4<br />and IPv6 Service CIDRs) are reachable through this router's routing<br />peers. Reverse-proxy targets resolve a Service's DNS name to a ClusterIP<br />in one of these ranges and route to it via the matching subnet resource. |  | Optional: \{\} <br /> |
+| `serviceCIDRs` _string array_ | ServiceCIDRs are CIDRs routed into the NetBird network as subnet<br />resources, so that addresses in these ranges (e.g. the cluster's IPv4<br />and IPv6 Service CIDRs) are reachable through this router's routing<br />peers. Reverse-proxy targets resolve a Service's DNS name to a ClusterIP<br />in one of these ranges and route to it via the matching subnet resource. |  | MaxItems: 64 <br />items:MaxLength: 43 <br />Optional: \{\} <br /> |
 | `resourceGroups` _[GroupReference](#groupreference) array_ | ResourceGroups are the NetBird groups assigned to the resources created<br />in this router's network — both the ServiceCIDRs subnet resources and the<br />per-service resources backing HTTPRoutes (the latter inherit these unless<br />the NetworkResource sets its own Groups). Access policies target these<br />groups to grant peers access to the routed resources. |  | Optional: \{\} <br /> |
 | `image` _string_ | Netbird client image. |  | Optional: \{\} <br /> |
-| `logLevel` _string_ | Log level for Netbird client. |  | Optional: \{\} <br /> |
+| `logLevel` _string_ | Log level for the Netbird client. |  | Enum: [error warn info debug trace] <br />Optional: \{\} <br /> |
 | `workloadOverride` _[WorkloadOverride](#workloadoverride)_ | WorkloadOverride contains configuration that will override the default workload. |  | Optional: \{\} <br /> |
 
 
@@ -542,7 +543,7 @@ _Appears in:_
 | `name` _string_ | Name of the setup key. |  | MinLength: 1 <br /> |
 | `ephemeral` _boolean_ | Ephemeral decides if peers added with the key are ephemeral or not. |  |  |
 | `allowExtraDnsLabels` _boolean_ | AllowExtraDnsLabels decides if peers added with the key can have extra DNS labels. | false |  |
-| `duration` _[Duration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#duration-v1-meta)_ | Duration sets how long the setup key is valid for. |  | Pattern: `^([0-9]+(\.[0-9]+)?(m\|h))+$` <br />Type: string <br />Optional: \{\} <br /> |
+| `duration` _[Duration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#duration-v1-meta)_ | Duration sets how long the setup key is valid for. When unset (or zero) the<br />key does not expire — set a duration for time-limited keys. Only minute (m)<br />and hour (h) units are accepted. |  | Pattern: `^([0-9]+(\.[0-9]+)?(m\|h))+$` <br />Type: string <br />Optional: \{\} <br /> |
 | `autoGroups` _[GroupReference](#groupreference) array_ | AutoGroups are groups that will be automatically assigned to peers using setup key. |  | Optional: \{\} <br /> |
 
 
@@ -618,6 +619,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
+| `observedGeneration` _integer_ | ObservedGeneration is the last reconciled generation. |  | Optional: \{\} <br /> |
 | `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#condition-v1-meta) array_ | Conditions holds the conditions for the SidecarProfile. |  | Optional: \{\} <br /> |
 
 

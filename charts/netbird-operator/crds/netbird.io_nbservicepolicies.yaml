@@ -211,6 +211,10 @@ spec:
             required:
             - targetRefs
             type: object
+            x-kubernetes-validations:
+            - message: accessGroups is required when private is true
+              rule: '!has(self.private) || !self.private || (has(self.accessGroups)
+                && self.accessGroups.size() > 0)'
           status:
             default:
               observedGeneration: -1

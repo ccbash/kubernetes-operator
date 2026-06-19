@@ -9,6 +9,7 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -23,10 +24,12 @@ import (
 
 type TCPRouteReconciler struct {
 	client.Client
+
+	Recorder record.EventRecorder
 }
 
 func (r *TCPRouteReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := ctrl.Log.WithName("TCPRoute").WithValues("namespace", req.Namespace, "name", req.Name)
+	logger := ctrl.LoggerFrom(ctx)
 
 	tr := &gwv1alpha2.TCPRoute{}
 	err := r.Get(ctx, req.NamespacedName, tr)
@@ -60,6 +63,8 @@ func (r *TCPRouteReconciler) reconcileParent(ctx context.Context, logger logr.Lo
 	}
 	if !meta.IsStatusConditionTrue(gw.Status.Conditions, string(gwv1.GatewayConditionProgrammed)) {
 		logger.Info("gateway is not ready", "name", gw.ObjectMeta.Name)
+		recordEvent(r.Recorder, tr, corev1.EventTypeWarning, reasonDependencyNotReady,
+			"Gateway %s is not programmed yet", gw.Name)
 		return nil
 	}
 	netRouter, err := gatewayutil.GetGatewayNetworkRouter(ctx, r.Client, gw)
@@ -67,7 +72,7 @@ func (r *TCPRouteReconciler) reconcileParent(ctx context.Context, logger logr.Lo
 		return err
 	}
 
-	logger.Info("reconciling TCPRoute", "gateway", gw.Name)
+	logger.V(1).Info("reconciling TCPRoute", "gateway", gw.Name)
 
 	controllerutil.AddFinalizer(tr, k8sutil.Finalizer("tcproute"))
 	if err := sp.Patch(ctx, tr); err != nil {
@@ -151,5 +156,6 @@ func (r *TCPRouteReconciler) reconcileDelete(ctx context.Context, sp *patch.Seri
 func (r *TCPRouteReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&gwv1alpha2.TCPRoute{}).
+		WithLogConstructor(logConstructor(mgr, "TCPRoute")).
 		Complete(r)
 }

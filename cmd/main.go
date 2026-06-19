@@ -23,6 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -32,6 +33,7 @@ import (
 
 	nbv1alpha1 "github.com/netbirdio/kubernetes-operator/api/v1alpha1"
 	"github.com/netbirdio/kubernetes-operator/internal/controller"
+	"github.com/netbirdio/kubernetes-operator/internal/logging"
 	"github.com/netbirdio/kubernetes-operator/internal/version"
 	nbwebhookv1 "github.com/netbirdio/kubernetes-operator/internal/webhook/v1"
 )
@@ -69,16 +71,26 @@ func main() {
 	// Controller generic flags
 	var (
 		metricsAddr          string
+		metricsSecure        bool
 		webhookCertPath      string
 		webhookCertName      string
 		webhookCertKey       string
 		enableLeaderElection bool
 		probeAddr            string
 		enableWebhooks       bool
+		logLevel             string
+		logFormat            string
 	)
+	flag.StringVar(&logLevel, "log-level", "info",
+		"Log verbosity: debug, info, warn, error, or a non-negative integer for higher debug verbosity.")
+	flag.StringVar(&logFormat, "log-format", "json",
+		"Log output format: json (structured) or console (human-readable).")
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
+	flag.BoolVar(&metricsSecure, "metrics-secure", true,
+		"Serve metrics over HTTPS and require authentication/authorization (TokenReview/SubjectAccessReview). "+
+			"Set false only for trusted-network HTTP scraping.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
@@ -87,15 +99,16 @@ func main() {
 	flag.StringVar(&webhookCertName, "webhook-cert-name", "tls.crt", "The name of the webhook certificate file.")
 	flag.StringVar(&webhookCertKey, "webhook-cert-key", "tls.key", "The name of the webhook key file.")
 	flag.BoolVar(&enableWebhooks, "enable-webhooks", true, "If set, enable Mutating and Validating webhooks.")
-	opts := zap.Options{
-		Development: true,
-	}
-	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	zapOpts, err := logging.Options(logLevel, logFormat)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err.Error())
+		os.Exit(1)
+	}
+	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zapOpts)))
 
-	_, err := url.Parse(managementURL)
+	_, err = url.Parse(managementURL)
 	if err != nil {
 		setupLog.Error(err, "invalid management url")
 		os.Exit(1)
@@ -136,12 +149,20 @@ func main() {
 	}
 	webhookServer := webhook.NewServer(webhook.Options{TLSOpts: []TLSOption{tlsOpt}})
 
+	// Authenticate/authorize metrics scrapers (and serve over HTTPS) unless
+	// explicitly disabled for a trusted-network HTTP setup.
+	metricsOpts := metricsserver.Options{
+		BindAddress:   metricsAddr,
+		SecureServing: metricsSecure,
+	}
+	if metricsSecure {
+		metricsOpts.FilterProvider = filters.WithAuthenticationAndAuthorization
+	}
+
 	// Setup controller manager.
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme: scheme,
-		Metrics: metricsserver.Options{
-			BindAddress: metricsAddr,
-		},
+		Scheme:  scheme,
+		Metrics: metricsOpts,
 		Client: client.Options{
 			FieldOwner: "netbird-operator",
 		},
@@ -212,14 +233,16 @@ func setupControllers(mgr ctrl.Manager, netbirdAPIKey, managementURL, netbirdCli
 	)
 
 	if err := (&controller.SetupKeyReconciler{
-		Client:  mgr.GetClient(),
-		Netbird: nbClient,
+		Client:   mgr.GetClient(),
+		Netbird:  nbClient,
+		Recorder: mgr.GetEventRecorderFor("setupkey"),
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("setup SetupKey controller: %w", err)
 	}
 	if err := (&controller.GroupReconciler{
-		Client:  mgr.GetClient(),
-		Netbird: nbClient,
+		Client:   mgr.GetClient(),
+		Netbird:  nbClient,
+		Recorder: mgr.GetEventRecorderFor("group"),
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("setup Group controller: %w", err)
 	}
@@ -228,12 +251,14 @@ func setupControllers(mgr ctrl.Manager, netbirdAPIKey, managementURL, netbirdCli
 		Netbird:       nbClient,
 		ClientImage:   netbirdClientImage,
 		ManagementURL: managementURL,
+		Recorder:      mgr.GetEventRecorderFor("networkrouter"),
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("setup NetworkRouter controller: %w", err)
 	}
 	if err := (&controller.NetworkResourceReconciler{
-		Client:  mgr.GetClient(),
-		Netbird: nbClient,
+		Client:   mgr.GetClient(),
+		Netbird:  nbClient,
+		Recorder: mgr.GetEventRecorderFor("networkresource"),
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("setup NetworkResource controller: %w", err)
 	}
@@ -241,6 +266,7 @@ func setupControllers(mgr ctrl.Manager, netbirdAPIKey, managementURL, netbirdCli
 		Client:        mgr.GetClient(),
 		ApiKey:        netbirdAPIKey,
 		ManagementURL: managementURL,
+		Recorder:      mgr.GetEventRecorderFor("clusterproxy"),
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("setup ClusterProxy controller: %w", err)
 	}
@@ -259,13 +285,15 @@ func setupControllers(mgr ctrl.Manager, netbirdAPIKey, managementURL, netbirdCli
 		return fmt.Errorf("setup Gateway controller: %w", err)
 	}
 	if err := (&controller.HTTPRouteReconciler{
-		Client:  mgr.GetClient(),
-		Netbird: nbClient,
+		Client:   mgr.GetClient(),
+		Netbird:  nbClient,
+		Recorder: mgr.GetEventRecorderFor("httproute"),
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("setup HTTPRoute controller: %w", err)
 	}
 	if err := (&controller.TCPRouteReconciler{
-		Client: mgr.GetClient(),
+		Client:   mgr.GetClient(),
+		Recorder: mgr.GetEventRecorderFor("tcproute"),
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("setup TCPRoute controller: %w", err)
 	}

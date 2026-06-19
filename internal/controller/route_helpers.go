@@ -43,7 +43,9 @@ func detachNetworkResource(ctx context.Context, c client.Client, scheme *runtime
 		ObjectMeta: metav1.ObjectMeta{Name: svc.Name, Namespace: svc.Namespace},
 	}
 	if err := c.Get(ctx, client.ObjectKeyFromObject(netResource), netResource); err != nil {
-		return err
+		// Already gone (e.g. the Service and its NetworkResource were deleted) —
+		// nothing to detach.
+		return client.IgnoreNotFound(err)
 	}
 	if err := controllerutil.RemoveOwnerReference(owner, netResource, scheme); err != nil {
 		return err

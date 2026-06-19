@@ -149,3 +149,25 @@ for management-side setup.
 Service exposure also consumes the upstream Gateway API kinds `HTTPRoute` and
 `TCPRoute` (`gateway.networking.k8s.io`). Full field reference:
 [`docs/api-reference.md`](docs/api-reference.md).
+
+## Configuration
+
+The operator is configured with command-line flags (see `--help` for the full
+list). The most useful ones:
+
+| Flag | Default | Purpose |
+|------|---------|---------|
+| `--log-level` | `info` | Log verbosity: `debug`, `info`, `warn`, `error`, or a non-negative integer for higher debug verbosity (`2` = `V(2)`). |
+| `--log-format` | `json` | Log output: `json` (structured, ISO8601 timestamps — like Flux and other controller-runtime operators) or `console` (human-readable, for local runs). |
+| `--gateway-api-enabled` | `false` | Reconcile Gateway API resources (service exposure). |
+| `--netbird-management-url` | `https://api.netbird.io` | NetBird Management API URL (set for self-hosted). |
+| `--metrics-bind-address` | `0` (off) | `:8080` for HTTP or `:8443` for HTTPS metrics. |
+
+Routine per-reconcile messages are logged at debug, so at `info` the operator is
+quiet unless something notable happens; raise `--log-level=debug` to see the
+reconcile trace. Stack traces are recorded only for panics (or at error level
+when running at debug), so routine errors stay a single line.
+
+When installed with the Helm chart these are set through values — logging via
+`operator.logging.level` / `operator.logging.format`, Gateway API via
+`gatewayAPI.enabled`, and the Management URL via `managementURL`.

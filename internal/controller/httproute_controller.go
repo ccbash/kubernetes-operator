@@ -4,20 +4,25 @@ package controller
 
 import (
 	"context"
-	"time"
+	"strings"
 
 	"github.com/fluxcd/pkg/runtime/conditions"
 	"github.com/fluxcd/pkg/runtime/patch"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	netbird "github.com/netbirdio/netbird/shared/management/client/rest"
@@ -33,11 +38,12 @@ import (
 type HTTPRouteReconciler struct {
 	client.Client
 
-	Netbird *netbird.Client
+	Netbird  *netbird.Client
+	Recorder record.EventRecorder
 }
 
 func (r *HTTPRouteReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := ctrl.Log.WithName("HTTPRoute").WithValues("namespace", req.Namespace, "name", req.Name)
+	logger := ctrl.LoggerFrom(ctx)
 
 	hr := &gwv1.HTTPRoute{}
 	err := r.Get(ctx, req.NamespacedName, hr)
@@ -87,7 +93,7 @@ func (r *HTTPRouteReconciler) reconcileParent(ctx context.Context, logger logr.L
 		return ctrl.Result{}, err
 	}
 
-	logger.Info("reconciling HTTPRoute", "gateway", gw.Name)
+	logger.V(1).Info("reconciling HTTPRoute", "gateway", gw.Name)
 
 	controllerutil.AddFinalizer(hr, k8sutil.Finalizer("httproute"))
 	if err := sp.Patch(ctx, hr); err != nil {
@@ -104,9 +110,11 @@ func (r *HTTPRouteReconciler) reconcileParent(ctx context.Context, logger logr.L
 	missing := missingBackendNames(hr, svcIdx)
 	if len(missing) > 0 {
 		logger.Info("backend Service(s) not found; routing the resolvable backends and retrying", "missing", missing)
+		recordEvent(r.Recorder, hr, corev1.EventTypeWarning, reasonBackendNotFound,
+			"Backend Service(s) %v not found; routing resolvable backends and retrying", missing)
 	}
 	if len(svcIdx) == 0 {
-		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+		return ctrl.Result{RequeueAfter: backendRetry}, nil
 	}
 
 	// Resolve the attached NBServicePolicies up front. routingMode decides
@@ -128,25 +136,30 @@ func (r *HTTPRouteReconciler) reconcileParent(ctx context.Context, logger logr.L
 		return ctrl.Result{}, err
 	}
 	if !ready {
-		return ctrl.Result{RequeueAfter: 1 * time.Second}, nil
+		return ctrl.Result{RequeueAfter: quickRetry}, nil
 	}
 
 	targets := buildTargets(logger, hr, svcIdx, resourceID, targetType)
 	if err := r.reconcileProxyServices(ctx, hr, targets, policies); err != nil {
 		// A proxy target can reference a NetworkResource that was deleted on the
-		// control plane: the resource ID in the NetworkResource status is then
-		// stale until its controller recreates it. Treat that as transient —
-		// back off and retry rather than logging an error with a stack trace.
-		if netbirdutil.IsTargetNotFound(err) {
-			logger.Info("reverse-proxy target resource not found yet; awaiting recreation", "gateway", gw.Name)
-			return ctrl.Result{RequeueAfter: time.Minute}, nil
+		// control plane (target not found), or — during a routing-mode switch —
+		// still reference the old-typed resource while the new target type is
+		// applied (target-type mismatch). Both are transient: the NetworkResource
+		// controller recreates/repoints the resource and the watch re-reconciles
+		// this route. Back off and retry rather than logging an error + stack
+		// trace each time.
+		if netbirdutil.IsTargetNotFound(err) || netbirdutil.IsTargetTypeMismatch(err) {
+			logger.Info("reverse-proxy target not ready yet; awaiting resource update", "gateway", gw.Name)
+			recordEvent(r.Recorder, hr, corev1.EventTypeWarning, reasonProxyTargetMissing,
+				"Reverse-proxy target not ready yet (resource recreating/repointing); retrying")
+			return ctrl.Result{RequeueAfter: dependencyRetry}, nil
 		}
 		return ctrl.Result{}, err
 	}
 
 	// Some backends weren't resolvable; retry so they're wired up once present.
 	if len(missing) > 0 {
-		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+		return ctrl.Result{RequeueAfter: backendRetry}, nil
 	}
 	return ctrl.Result{}, nil
 }
@@ -235,6 +248,11 @@ func (r *HTTPRouteReconciler) resolveResourceIDs(ctx context.Context, hr *gwv1.H
 			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: hr.Namespace},
 		}
 		if err := r.Client.Get(ctx, client.ObjectKeyFromObject(netResource), netResource); err != nil {
+			// Just applied by ensureNetworkResources; a not-yet-visible resource
+			// is a transient state — requeue rather than error.
+			if kerrors.IsNotFound(err) {
+				return nil, false, nil
+			}
 			return nil, false, err
 		}
 		if !conditions.Has(netResource, nbv1alpha1.ReadyCondition) {
@@ -351,36 +369,29 @@ func (r *HTTPRouteReconciler) reconcileDelete(ctx context.Context, sp *patch.Ser
 		proxyIdx[proxyService.Domain] = proxyService.Id
 	}
 
-	for _, parent := range hr.Spec.ParentRefs {
-		gw, err := gatewayutil.GetParentGateway(ctx, r.Client, parent, hr.Namespace, GatewayControllerName)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		if gw == nil {
+	// Delete the reverse-proxy service for each hostname this route owns. This
+	// runs regardless of whether the parent Gateway still exists — otherwise a
+	// Gateway deleted before its routes would orphan the proxy services on the
+	// NetBird control plane (the finalizer is removed below either way).
+	for _, hostname := range hr.Spec.Hostnames {
+		id, ok := proxyIdx[string(hostname)]
+		if !ok {
 			continue
 		}
-
-		// Detach the route from each backend Service's NetworkResource.
-		svcIdx, err := r.indexBackendServices(ctx, hr, true)
-		if err != nil {
+		if err := r.Netbird.ReverseProxyServices.Delete(ctx, id); err != nil && !netbird.IsNotFound(err) {
 			return ctrl.Result{}, err
 		}
-		for _, svc := range svcIdx {
-			if err := detachNetworkResource(ctx, r.Client, r.Scheme(), hr, svc); err != nil {
-				return ctrl.Result{}, err
-			}
-		}
+	}
 
-		// Remove the target from the proxy service.
-		for _, hostname := range hr.Spec.Hostnames {
-			id, ok := proxyIdx[string(hostname)]
-			if !ok {
-				continue
-			}
-			err = r.Netbird.ReverseProxyServices.Delete(ctx, id)
-			if err != nil && !netbird.IsNotFound(err) {
-				return ctrl.Result{}, err
-			}
+	// Detach the route from each backend Service's NetworkResource, deleting the
+	// resource when this route was its last owner.
+	svcIdx, err := r.indexBackendServices(ctx, hr, true)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	for _, svc := range svcIdx {
+		if err := detachNetworkResource(ctx, r.Client, r.Scheme(), hr, svc); err != nil {
+			return ctrl.Result{}, err
 		}
 	}
 
@@ -411,10 +422,54 @@ func backendPortFor(svc corev1.Service, port int32) int {
 func (r *HTTPRouteReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&gwv1.HTTPRoute{}).
+		WithLogConstructor(logConstructor(mgr, "HTTPRoute")).
 		Watches(&nbv1alpha1.NBServicePolicy{},
 			handler.EnqueueRequestsFromMapFunc(routesForServicePolicy),
 			// Only spec changes (and create/delete) should re-reconcile the
 			// route; ignore the status-only writes from the policy controller.
 			builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		Watches(&nbv1alpha1.NetworkResource{},
+			handler.EnqueueRequestsFromMapFunc(httpRoutesForNetworkResource),
+			// Re-reconcile only when the resource ID changes, so the proxy target
+			// is repointed at a recreated resource (e.g. after a routing-mode
+			// switch) without churning on every unrelated status write.
+			builder.WithPredicates(networkResourceIDChanged)).
 		Complete(r)
+}
+
+// httpRoutesForNetworkResource maps a NetworkResource event to reconcile
+// requests for the HTTPRoute(s) that own it (the HTTPRoute controller records
+// itself as a non-controller owner). It repoints the reverse-proxy after a
+// routing-mode switch recreates the resource under a new ID: the route rebuilds
+// its targets against the new ID, which finally lets the old resource drain.
+func httpRoutesForNetworkResource(_ context.Context, obj client.Object) []reconcile.Request {
+	var reqs []reconcile.Request
+	for _, ref := range obj.GetOwnerReferences() {
+		if ref.Kind != httpRouteKind {
+			continue
+		}
+		if group, _, _ := strings.Cut(ref.APIVersion, "/"); group != gatewayAPIGroup {
+			continue
+		}
+		reqs = append(reqs, reconcile.Request{
+			NamespacedName: types.NamespacedName{Namespace: obj.GetNamespace(), Name: ref.Name},
+		})
+	}
+	return reqs
+}
+
+// networkResourceIDChanged passes a NetworkResource update only when its
+// resource ID changes (or it is created), so the HTTPRoute controller isn't
+// re-run on every status patch (DNS records, conditions, drained stale IDs).
+var networkResourceIDChanged = predicate.Funcs{
+	CreateFunc: func(event.CreateEvent) bool { return true },
+	DeleteFunc: func(event.DeleteEvent) bool { return false },
+	UpdateFunc: func(e event.UpdateEvent) bool {
+		oldR, ok1 := e.ObjectOld.(*nbv1alpha1.NetworkResource)
+		newR, ok2 := e.ObjectNew.(*nbv1alpha1.NetworkResource)
+		if !ok1 || !ok2 {
+			return false
+		}
+		return oldR.Status.ResourceID != newR.Status.ResourceID
+	},
 }

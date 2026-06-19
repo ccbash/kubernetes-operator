@@ -16,18 +16,43 @@ import (
 func TestIsConflict(t *testing.T) {
 	t.Parallel()
 
-	// 400 and 409 are the "still in use" responses callers back off on.
+	// 400, 409 and 412 are the "still in use" responses callers back off on.
+	// 412 (Precondition Failed) is NetBird's "resource is in use by proxy".
 	require.True(t, IsConflict(&netbird.APIError{StatusCode: http.StatusBadRequest}))
 	require.True(t, IsConflict(&netbird.APIError{StatusCode: http.StatusConflict}))
+	require.True(t, IsConflict(&netbird.APIError{StatusCode: http.StatusPreconditionFailed}))
 
 	// A wrapped API error is still recognised.
 	require.True(t, IsConflict(fmt.Errorf("delete group: %w", &netbird.APIError{StatusCode: http.StatusConflict})))
+	require.True(t, IsConflict(fmt.Errorf("delete resource: %w", &netbird.APIError{
+		StatusCode: http.StatusPreconditionFailed,
+		Message:    "resource d8pdh105n19c73a0u7lg is in use by proxy d8pdhg05n19c73a0u8r0",
+	})))
 
 	// Other statuses, non-API errors and nil are not conflicts.
 	require.False(t, IsConflict(&netbird.APIError{StatusCode: http.StatusNotFound}))
 	require.False(t, IsConflict(&netbird.APIError{StatusCode: http.StatusInternalServerError}))
 	require.False(t, IsConflict(errors.New("boom")))
 	require.False(t, IsConflict(nil))
+}
+
+func TestIsTargetTypeMismatch(t *testing.T) {
+	t.Parallel()
+
+	// The transient routing-mode-switch error.
+	require.True(t, IsTargetTypeMismatch(&netbird.APIError{
+		StatusCode: http.StatusUnprocessableEntity,
+		Message:    `target "res-1" has target_type "host" but resource is of type "domain"`,
+	}))
+	// Wrapped, still recognised.
+	require.True(t, IsTargetTypeMismatch(fmt.Errorf("update proxy: %w", &netbird.APIError{
+		Message: `target_type "domain" but resource is of type "host"`,
+	})))
+
+	// Unrelated validation errors and non-API errors are not this case.
+	require.False(t, IsTargetTypeMismatch(&netbird.APIError{Message: "invalid CIDR"}))
+	require.False(t, IsTargetTypeMismatch(errors.New("target_type")))
+	require.False(t, IsTargetTypeMismatch(nil))
 }
 
 func TestIsTargetNotFound(t *testing.T) {

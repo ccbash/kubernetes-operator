@@ -5,13 +5,13 @@ package controller
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/fluxcd/pkg/runtime/conditions"
 	"github.com/fluxcd/pkg/runtime/patch"
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -31,7 +31,8 @@ const (
 type SetupKeyReconciler struct {
 	client.Client
 
-	Netbird *netbird.Client
+	Netbird  *netbird.Client
+	Recorder record.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=netbird.io,resources=setupkeys,verbs=get;list;watch;create;update;patch;delete
@@ -43,7 +44,7 @@ func (r *SetupKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	ctrl.LoggerFrom(ctx).Info("reconciling setup key")
+	ctrl.LoggerFrom(ctx).V(1).Info("reconciling setup key")
 	owner, err := k8sutil.ControllerReference(setupKey, r.Client.Scheme())
 	if err != nil {
 		return ctrl.Result{}, err
@@ -82,6 +83,7 @@ func (r *SetupKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		switch resp.State {
 		case "valid":
 		case "overused":
+			recordEvent(r.Recorder, setupKey, corev1.EventTypeWarning, reasonDependencyNotReady, "Setup key is overused; recreating")
 			return false, errors.New("setup key is overused")
 		default:
 			return false, nil
@@ -96,7 +98,13 @@ func (r *SetupKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		if err != nil {
 			return false, err
 		}
-		if resp.Key[:5] != string(secret.Data[SetupKeySecretKey])[:5] {
+		// Compare a short prefix to detect a rotated/cleared secret. Guard the
+		// lengths: a NetBird-returned key or a secret emptied out of band can be
+		// shorter than the prefix, and slicing it would panic the worker.
+		const keyPrefixLen = 5
+		storedKey := string(secret.Data[SetupKeySecretKey])
+		if len(resp.Key) < keyPrefixLen || len(storedKey) < keyPrefixLen ||
+			resp.Key[:keyPrefixLen] != storedKey[:keyPrefixLen] {
 			return false, nil
 		}
 
@@ -115,7 +123,7 @@ func (r *SetupKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 	if ok {
-		return ctrl.Result{RequeueAfter: 15 * time.Minute}, nil
+		return ctrl.Result{RequeueAfter: resyncInterval}, nil
 	}
 	oldSetupKeyID := setupKey.Status.SetupKeyID
 
@@ -168,7 +176,7 @@ func (r *SetupKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	return ctrl.Result{RequeueAfter: 15 * time.Minute}, nil
+	return ctrl.Result{RequeueAfter: resyncInterval}, nil
 }
 
 func (r *SetupKeyReconciler) reconcileDelete(ctx context.Context, sp *patch.SerialPatcher, setupKey *nbv1alpha1.SetupKey) (ctrl.Result, error) {
@@ -190,6 +198,7 @@ func (r *SetupKeyReconciler) reconcileDelete(ctx context.Context, sp *patch.Seri
 func (r *SetupKeyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&nbv1alpha1.SetupKey{}).
+		WithLogConstructor(logConstructor(mgr, "SetupKey")).
 		Owns(&corev1.Secret{}).
 		Complete(r)
 }

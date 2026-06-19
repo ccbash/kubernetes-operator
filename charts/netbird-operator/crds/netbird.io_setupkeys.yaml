@@ -86,7 +86,10 @@ spec:
                     rule: (has(self.id)?1:0)+(has(self.name)?1:0)+(has(self.localRef)?1:0)==1
                 type: array
               duration:
-                description: Duration sets how long the setup key is valid for.
+                description: |-
+                  Duration sets how long the setup key is valid for. When unset (or zero) the
+                  key does not expire — set a duration for time-limited keys. Only minute (m)
+                  and hour (h) units are accepted.
                 pattern: ^([0-9]+(\.[0-9]+)?(m|h))+$
                 type: string
                 x-kubernetes-validations:

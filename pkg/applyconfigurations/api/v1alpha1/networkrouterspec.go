@@ -25,7 +25,7 @@ type NetworkRouterSpecApplyConfiguration struct {
 	ResourceGroups []GroupReferenceApplyConfiguration `json:"resourceGroups,omitempty"`
 	// Netbird client image.
 	Image *string `json:"image,omitempty"`
-	// Log level for Netbird client.
+	// Log level for the Netbird client.
 	LogLevel *string `json:"logLevel,omitempty"`
 	// WorkloadOverride contains configuration that will override the default workload.
 	WorkloadOverride *WorkloadOverrideApplyConfiguration `json:"workloadOverride,omitempty"`

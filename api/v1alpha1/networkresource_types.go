@@ -29,6 +29,10 @@ type NetworkResourceSpec struct {
 	NetworkRouterRef CrossNamespaceReference `json:"networkRouterRef"`
 
 	// ServiceRef is a reference to the service to expose in the Network.
+	// Immutable: re-pointing at a different Service would change the resource's
+	// address/type in place, which the stale-resource drain only handles for
+	// routing-mode changes — create a new NetworkResource instead.
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="Value is immutable"
 	ServiceRef corev1.LocalObjectReference `json:"serviceRef"`
 
 	// Groups are references to groups that the resource will be a part of.
@@ -61,6 +65,15 @@ type NetworkResourceStatus struct {
 	// ResourceID is the id of the created resource.
 	// +optional
 	ResourceID string `json:"resourceID,omitempty"`
+
+	// StaleResourceIDs are previous NetBird resource IDs left over by a
+	// routing-mode change: switching host<->domain recreates the resource under a
+	// new type, but the old one cannot be deleted while a reverse-proxy service
+	// still targets it. The new resource is created first (it has a different
+	// address and name, so the two coexist) and the old IDs are drained here on
+	// later reconciles, once the proxy has been repointed at the new resource.
+	// +optional
+	StaleResourceIDs []string `json:"staleResourceIDs,omitempty"`
 
 	// DNSZoneID is the id of the zone the DNS record is created in.
 	// +optional

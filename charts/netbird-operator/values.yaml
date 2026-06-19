@@ -49,10 +49,21 @@ operator:
     # Overrides the image tag whose default is the chart appVersion.
     tag: ""
 
+  # Logging configuration for the operator.
+  logging:
+    # Log verbosity: debug, info, warn, error, or a non-negative integer for
+    # higher debug verbosity.
+    level: info
+    # Log output format: console (human-readable) or json (structured, for log
+    # aggregation).
+    format: json
+
   metrics:
     enabled: true
     type: ClusterIP
-    port: 8080
+    # HTTPS by default — the operator authenticates/authorizes scrapers
+    # (TokenReview/SubjectAccessReview). Scrape with a bearer token over https.
+    port: 8443
 
   # This is for the secretes for pulling an image from a private repository more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
   imagePullSecrets: []
@@ -98,13 +109,15 @@ operator:
     # This sets the ports more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#field-spec-ports
     port: 9443
 
-  resources: {}
-    # limits:
-    #   cpu: 100m
-    #   memory: 128Mi
-    # requests:
-    #   cpu: 100m
-    #   memory: 128Mi
+  # Default requests/limits so the operator pod isn't BestEffort (first to be
+  # OOM-killed/evicted). Override as needed for your cluster's scale.
+  resources:
+    limits:
+      cpu: 500m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
 
   # This is to setup the liveness and readiness probes more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
   livenessProbe:

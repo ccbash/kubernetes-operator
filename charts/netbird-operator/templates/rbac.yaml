@@ -69,8 +69,6 @@ rules:
   - get
   - list
   - watch
-  - update
-  - patch
 - apiGroups:
   - ""
   resources:
@@ -79,12 +77,6 @@ rules:
   - get
   - list
   - watch
-- apiGroups:
-  - ""
-  resources:
-  - services/finalizers
-  verbs:
-  - update
 - apiGroups:
   - apps
   resources:
@@ -117,6 +109,15 @@ rules:
   - get
   - list
   - watch
+# Events are created in the involved object's namespace, which can be any
+# namespace — so this must be cluster-scoped, not a namespaced Role.
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
 {{- if or .Values.netbirdAPI.keyFromSecret .Values.clusterSecretsPermissions.allowAllSecrets }}
 - apiGroups:
   - ""
@@ -171,6 +172,25 @@ subjects:
 - kind: ServiceAccount
   name: {{ include "netbird-operator.serviceAccountName" . }}
   namespace: {{ .Release.Namespace }}
+{{- if .Values.operator.metrics.enabled }}
+---
+# Lets the operator authenticate/authorize metrics scrapers via the
+# TokenReview/SubjectAccessReview APIs (required for --metrics-secure).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "netbird-operator.fullname" . }}-auth-delegator
+  labels:
+    {{- include "netbird-operator.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+- kind: ServiceAccount
+  name: {{ include "netbird-operator.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -203,13 +223,6 @@ rules:
   - update
   - patch
   - delete
-- apiGroups:
-  - ""
-  resources:
-  - events
-  verbs:
-  - create
-  - patch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
