@@ -32,6 +32,7 @@ import (
 
 	nbv1alpha1 "github.com/netbirdio/kubernetes-operator/api/v1alpha1"
 	"github.com/netbirdio/kubernetes-operator/internal/controller"
+	"github.com/netbirdio/kubernetes-operator/internal/logging"
 	"github.com/netbirdio/kubernetes-operator/internal/version"
 	nbwebhookv1 "github.com/netbirdio/kubernetes-operator/internal/webhook/v1"
 )
@@ -75,7 +76,13 @@ func main() {
 		enableLeaderElection bool
 		probeAddr            string
 		enableWebhooks       bool
+		logLevel             string
+		logFormat            string
 	)
+	flag.StringVar(&logLevel, "log-level", "info",
+		"Log verbosity: debug, info, warn, error, or a non-negative integer for higher debug verbosity.")
+	flag.StringVar(&logFormat, "log-format", "console",
+		"Log output format: console (human-readable) or json (structured).")
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -87,15 +94,16 @@ func main() {
 	flag.StringVar(&webhookCertName, "webhook-cert-name", "tls.crt", "The name of the webhook certificate file.")
 	flag.StringVar(&webhookCertKey, "webhook-cert-key", "tls.key", "The name of the webhook key file.")
 	flag.BoolVar(&enableWebhooks, "enable-webhooks", true, "If set, enable Mutating and Validating webhooks.")
-	opts := zap.Options{
-		Development: true,
-	}
-	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	zapOpts, err := logging.Options(logLevel, logFormat)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err.Error())
+		os.Exit(1)
+	}
+	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zapOpts)))
 
-	_, err := url.Parse(managementURL)
+	_, err = url.Parse(managementURL)
 	if err != nil {
 		setupLog.Error(err, "invalid management url")
 		os.Exit(1)

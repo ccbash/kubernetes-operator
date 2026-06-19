@@ -37,6 +37,10 @@ spec:
           image: "{{ .Values.operator.image.registry }}/{{ .Values.operator.image.repository }}:{{ .Values.operator.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.operator.image.pullPolicy }}
           args:
+          {{- with .Values.operator.logging }}
+          - --log-level={{ .level | default "info" }}
+          - --log-format={{ .format | default "json" }}
+          {{- end }}
           {{- if .Values.operator.metrics.enabled }}
           - --metrics-bind-address=:{{ .Values.operator.metrics.port}}
           {{- end }}

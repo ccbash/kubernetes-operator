@@ -149,3 +149,25 @@ for management-side setup.
 Service exposure also consumes the upstream Gateway API kinds `HTTPRoute` and
 `TCPRoute` (`gateway.networking.k8s.io`). Full field reference:
 [`docs/api-reference.md`](docs/api-reference.md).
+
+## Configuration
+
+The operator is configured with command-line flags (see `--help` for the full
+list). The most useful ones:
+
+| Flag | Default | Purpose |
+|------|---------|---------|
+| `--log-level` | `info` | Log verbosity: `debug`, `info`, `warn`, `error`, or a non-negative integer for higher debug verbosity (`2` = `V(2)`). |
+| `--log-format` | `console` | Log output: `console` (human-readable) or `json` (structured, for log aggregation). |
+| `--gateway-api-enabled` | `false` | Reconcile Gateway API resources (service exposure). |
+| `--netbird-management-url` | `https://api.netbird.io` | NetBird Management API URL (set for self-hosted). |
+| `--metrics-bind-address` | `0` (off) | `:8080` for HTTP or `:8443` for HTTPS metrics. |
+
+Stack traces are recorded only for panics, so routine errors stay a single line;
+running at `--log-level=debug` lowers that to error level so traces are available
+while debugging.
+
+When installed with the Helm chart these are set through values — logging via
+`operator.logging.level` / `operator.logging.format` (the chart defaults to
+`json` for structured cluster logs), Gateway API via `gatewayAPI.enabled`, and
+the Management URL via `managementURL`.

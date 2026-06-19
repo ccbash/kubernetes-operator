@@ -4,6 +4,7 @@ package controller
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/fluxcd/pkg/runtime/conditions"
@@ -12,12 +13,15 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	netbird "github.com/netbirdio/netbird/shared/management/client/rest"
@@ -416,5 +420,48 @@ func (r *HTTPRouteReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			// Only spec changes (and create/delete) should re-reconcile the
 			// route; ignore the status-only writes from the policy controller.
 			builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		Watches(&nbv1alpha1.NetworkResource{},
+			handler.EnqueueRequestsFromMapFunc(httpRoutesForNetworkResource),
+			// Re-reconcile only when the resource ID changes, so the proxy target
+			// is repointed at a recreated resource (e.g. after a routing-mode
+			// switch) without churning on every unrelated status write.
+			builder.WithPredicates(networkResourceIDChanged)).
 		Complete(r)
+}
+
+// httpRoutesForNetworkResource maps a NetworkResource event to reconcile
+// requests for the HTTPRoute(s) that own it (the HTTPRoute controller records
+// itself as a non-controller owner). It repoints the reverse-proxy after a
+// routing-mode switch recreates the resource under a new ID: the route rebuilds
+// its targets against the new ID, which finally lets the old resource drain.
+func httpRoutesForNetworkResource(_ context.Context, obj client.Object) []reconcile.Request {
+	var reqs []reconcile.Request
+	for _, ref := range obj.GetOwnerReferences() {
+		if ref.Kind != httpRouteKind {
+			continue
+		}
+		if group, _, _ := strings.Cut(ref.APIVersion, "/"); group != gatewayAPIGroup {
+			continue
+		}
+		reqs = append(reqs, reconcile.Request{
+			NamespacedName: types.NamespacedName{Namespace: obj.GetNamespace(), Name: ref.Name},
+		})
+	}
+	return reqs
+}
+
+// networkResourceIDChanged passes a NetworkResource update only when its
+// resource ID changes (or it is created), so the HTTPRoute controller isn't
+// re-run on every status patch (DNS records, conditions, drained stale IDs).
+var networkResourceIDChanged = predicate.Funcs{
+	CreateFunc: func(event.CreateEvent) bool { return true },
+	DeleteFunc: func(event.DeleteEvent) bool { return false },
+	UpdateFunc: func(e event.UpdateEvent) bool {
+		oldR, ok1 := e.ObjectOld.(*nbv1alpha1.NetworkResource)
+		newR, ok2 := e.ObjectNew.(*nbv1alpha1.NetworkResource)
+		if !ok1 || !ok2 {
+			return false
+		}
+		return oldR.Status.ResourceID != newR.Status.ResourceID
+	},
 }
