@@ -37,18 +37,18 @@ func TestOptionsLevels(t *testing.T) {
 func TestOptionsFormat(t *testing.T) {
 	t.Parallel()
 
-	// console is development mode (human-readable), json is not.
-	consoleOpts, err := Options("info", "console")
-	require.NoError(t, err)
-	require.True(t, consoleOpts.Development)
-
-	defaultOpts, err := Options("info", "")
-	require.NoError(t, err)
-	require.True(t, defaultOpts.Development)
-
+	// json (structured) is the default; console is development mode.
 	jsonOpts, err := Options("info", "JSON")
 	require.NoError(t, err)
 	require.False(t, jsonOpts.Development)
+
+	defaultOpts, err := Options("info", "")
+	require.NoError(t, err)
+	require.False(t, defaultOpts.Development)
+
+	consoleOpts, err := Options("info", "console")
+	require.NoError(t, err)
+	require.True(t, consoleOpts.Development)
 }
 
 func TestOptionsStacktrace(t *testing.T) {

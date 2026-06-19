@@ -158,16 +158,16 @@ list). The most useful ones:
 | Flag | Default | Purpose |
 |------|---------|---------|
 | `--log-level` | `info` | Log verbosity: `debug`, `info`, `warn`, `error`, or a non-negative integer for higher debug verbosity (`2` = `V(2)`). |
-| `--log-format` | `console` | Log output: `console` (human-readable) or `json` (structured, for log aggregation). |
+| `--log-format` | `json` | Log output: `json` (structured, ISO8601 timestamps — like Flux and other controller-runtime operators) or `console` (human-readable, for local runs). |
 | `--gateway-api-enabled` | `false` | Reconcile Gateway API resources (service exposure). |
 | `--netbird-management-url` | `https://api.netbird.io` | NetBird Management API URL (set for self-hosted). |
 | `--metrics-bind-address` | `0` (off) | `:8080` for HTTP or `:8443` for HTTPS metrics. |
 
-Stack traces are recorded only for panics, so routine errors stay a single line;
-running at `--log-level=debug` lowers that to error level so traces are available
-while debugging.
+Routine per-reconcile messages are logged at debug, so at `info` the operator is
+quiet unless something notable happens; raise `--log-level=debug` to see the
+reconcile trace. Stack traces are recorded only for panics (or at error level
+when running at debug), so routine errors stay a single line.
 
 When installed with the Helm chart these are set through values — logging via
-`operator.logging.level` / `operator.logging.format` (the chart defaults to
-`json` for structured cluster logs), Gateway API via `gatewayAPI.enabled`, and
-the Management URL via `managementURL`.
+`operator.logging.level` / `operator.logging.format`, Gateway API via
+`gatewayAPI.enabled`, and the Management URL via `managementURL`.

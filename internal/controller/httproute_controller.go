@@ -41,7 +41,7 @@ type HTTPRouteReconciler struct {
 }
 
 func (r *HTTPRouteReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := ctrl.Log.WithName("HTTPRoute").WithValues("namespace", req.Namespace, "name", req.Name)
+	logger := ctrl.LoggerFrom(ctx)
 
 	hr := &gwv1.HTTPRoute{}
 	err := r.Get(ctx, req.NamespacedName, hr)
@@ -91,7 +91,7 @@ func (r *HTTPRouteReconciler) reconcileParent(ctx context.Context, logger logr.L
 		return ctrl.Result{}, err
 	}
 
-	logger.Info("reconciling HTTPRoute", "gateway", gw.Name)
+	logger.V(1).Info("reconciling HTTPRoute", "gateway", gw.Name)
 
 	controllerutil.AddFinalizer(hr, k8sutil.Finalizer("httproute"))
 	if err := sp.Patch(ctx, hr); err != nil {
@@ -415,6 +415,7 @@ func backendPortFor(svc corev1.Service, port int32) int {
 func (r *HTTPRouteReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&gwv1.HTTPRoute{}).
+		WithLogConstructor(logConstructor(mgr, "HTTPRoute")).
 		Watches(&nbv1alpha1.NBServicePolicy{},
 			handler.EnqueueRequestsFromMapFunc(routesForServicePolicy),
 			// Only spec changes (and create/delete) should re-reconcile the

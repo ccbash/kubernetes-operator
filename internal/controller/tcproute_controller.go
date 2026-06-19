@@ -26,7 +26,7 @@ type TCPRouteReconciler struct {
 }
 
 func (r *TCPRouteReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := ctrl.Log.WithName("TCPRoute").WithValues("namespace", req.Namespace, "name", req.Name)
+	logger := ctrl.LoggerFrom(ctx)
 
 	tr := &gwv1alpha2.TCPRoute{}
 	err := r.Get(ctx, req.NamespacedName, tr)
@@ -67,7 +67,7 @@ func (r *TCPRouteReconciler) reconcileParent(ctx context.Context, logger logr.Lo
 		return err
 	}
 
-	logger.Info("reconciling TCPRoute", "gateway", gw.Name)
+	logger.V(1).Info("reconciling TCPRoute", "gateway", gw.Name)
 
 	controllerutil.AddFinalizer(tr, k8sutil.Finalizer("tcproute"))
 	if err := sp.Patch(ctx, tr); err != nil {
@@ -151,5 +151,6 @@ func (r *TCPRouteReconciler) reconcileDelete(ctx context.Context, sp *patch.Seri
 func (r *TCPRouteReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&gwv1alpha2.TCPRoute{}).
+		WithLogConstructor(logConstructor(mgr, "TCPRoute")).
 		Complete(r)
 }

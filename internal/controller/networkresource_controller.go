@@ -47,7 +47,7 @@ func (r *NetworkResourceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	ctrl.LoggerFrom(ctx).Info("reconciling network resource")
+	ctrl.LoggerFrom(ctx).V(1).Info("reconciling network resource")
 	sp := patch.NewSerialPatcher(netResource, r.Client)
 
 	if !netResource.DeletionTimestamp.IsZero() {
@@ -477,6 +477,7 @@ func (r *NetworkResourceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&nbv1alpha1.NetworkResource{}).
+		WithLogConstructor(logConstructor(mgr, "NetworkResource")).
 		Watches(
 			&nbv1alpha1.NetworkRouter{},
 			handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {

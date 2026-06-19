@@ -56,7 +56,7 @@ func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return r.reconcileDelete(ctx, sp, gw)
 	}
 
-	ctrl.LoggerFrom(ctx).Info("reconciling gateway")
+	ctrl.LoggerFrom(ctx).V(1).Info("reconciling gateway")
 
 	// Verify Gateway configuration.
 	routingPeerName, err := gatewayutil.GetNetworkRouterName(gw.Spec.Listeners)
@@ -159,5 +159,6 @@ func (r *GatewayReconciler) reconcileDelete(ctx context.Context, sp *patch.Seria
 func (r *GatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&gwv1.Gateway{}).
+		WithLogConstructor(logConstructor(mgr, "Gateway")).
 		Complete(r)
 }

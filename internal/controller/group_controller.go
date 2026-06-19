@@ -39,7 +39,7 @@ func (r *GroupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	}
 	sp := patch.NewSerialPatcher(group, r.Client)
 
-	logf.FromContext(ctx).Info("reconciling group")
+	logf.FromContext(ctx).V(1).Info("reconciling group")
 
 	if !group.DeletionTimestamp.IsZero() {
 		return r.reconcileDelete(ctx, sp, group)
@@ -126,5 +126,6 @@ func (r *GroupReconciler) reconcileDelete(ctx context.Context, sp *patch.SerialP
 func (r *GroupReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&nbv1alpha1.Group{}).
+		WithLogConstructor(logConstructor(mgr, "Group")).
 		Complete(r)
 }

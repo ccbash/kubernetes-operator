@@ -22,8 +22,8 @@ import (
 // for higher debug verbosity (1 == debug, 2, 3, … map to logr V-levels, so
 // "--log-level=2" shows V(2) and below).
 //
-// format is console (human-readable, the default for local runs) or json
-// (structured, for log aggregation in a cluster).
+// format is json (structured, the default — matches Flux and other
+// controller-runtime operators) or console (human-readable, for local runs).
 //
 // Stack traces are recorded only for panics, so routine errors stay a single
 // line; running at debug level (or more verbose) lowers that to error level so
@@ -34,15 +34,21 @@ func Options(level, format string) (zap.Options, error) {
 		return zap.Options{}, err
 	}
 
-	opts := zap.Options{Level: lvl}
+	opts := zap.Options{
+		Level: lvl,
+		// ISO8601 millisecond timestamps (e.g. "2026-06-19T10:21:44.661Z"),
+		// matching the structured-log style of other controller-runtime operators
+		// (Flux, cert-manager, …) rather than zap's default epoch float.
+		TimeEncoder: zapcore.ISO8601TimeEncoder,
+	}
 
 	switch strings.ToLower(strings.TrimSpace(format)) {
-	case "", "console":
-		opts.Development = true
-	case "json":
+	case "", "json":
 		opts.Development = false
+	case "console":
+		opts.Development = true
 	default:
-		return zap.Options{}, fmt.Errorf("invalid log format %q: must be \"console\" or \"json\"", format)
+		return zap.Options{}, fmt.Errorf("invalid log format %q: must be \"json\" or \"console\"", format)
 	}
 
 	opts.StacktraceLevel = zapcore.PanicLevel

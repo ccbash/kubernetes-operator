@@ -56,7 +56,7 @@ func (r *NetworkRouterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	ctrl.LoggerFrom(ctx).Info("reconciling network router")
+	ctrl.LoggerFrom(ctx).V(1).Info("reconciling network router")
 	sp := patch.NewSerialPatcher(netRouter, r.Client)
 
 	if !netRouter.DeletionTimestamp.IsZero() {
@@ -528,6 +528,7 @@ func (r *NetworkRouterReconciler) reconcileDelete(ctx context.Context, sp *patch
 func (r *NetworkRouterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&nbv1alpha1.NetworkRouter{}).
+		WithLogConstructor(logConstructor(mgr, "NetworkRouter")).
 		Owns(&nbv1alpha1.Group{}).
 		Owns(&nbv1alpha1.SetupKey{}).
 		Owns(&appsv1.Deployment{}).

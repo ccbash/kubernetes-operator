@@ -81,8 +81,8 @@ func main() {
 	)
 	flag.StringVar(&logLevel, "log-level", "info",
 		"Log verbosity: debug, info, warn, error, or a non-negative integer for higher debug verbosity.")
-	flag.StringVar(&logFormat, "log-format", "console",
-		"Log output format: console (human-readable) or json (structured).")
+	flag.StringVar(&logFormat, "log-format", "json",
+		"Log output format: json (structured) or console (human-readable).")
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")

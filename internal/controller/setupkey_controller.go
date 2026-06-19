@@ -43,7 +43,7 @@ func (r *SetupKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	ctrl.LoggerFrom(ctx).Info("reconciling setup key")
+	ctrl.LoggerFrom(ctx).V(1).Info("reconciling setup key")
 	owner, err := k8sutil.ControllerReference(setupKey, r.Client.Scheme())
 	if err != nil {
 		return ctrl.Result{}, err
@@ -190,6 +190,7 @@ func (r *SetupKeyReconciler) reconcileDelete(ctx context.Context, sp *patch.Seri
 func (r *SetupKeyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&nbv1alpha1.SetupKey{}).
+		WithLogConstructor(logConstructor(mgr, "SetupKey")).
 		Owns(&corev1.Secret{}).
 		Complete(r)
 }

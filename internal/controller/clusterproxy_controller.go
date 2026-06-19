@@ -44,7 +44,7 @@ func (r *ClusterProxyReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	ctrl.LoggerFrom(ctx).Info("reconciling cluster proxy")
+	ctrl.LoggerFrom(ctx).V(1).Info("reconciling cluster proxy")
 	sp := patch.NewSerialPatcher(clusterProxy, r.Client)
 
 	if !clusterProxy.DeletionTimestamp.IsZero() {
@@ -201,6 +201,7 @@ func (r *ClusterProxyReconciler) Reconcile(ctx context.Context, req ctrl.Request
 func (r *ClusterProxyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&nbv1alpha1.ClusterProxy{}).
+		WithLogConstructor(logConstructor(mgr, "ClusterProxy")).
 		Owns(&nbv1alpha1.SetupKey{}).
 		Owns(&appsv1.Deployment{}).
 		Complete(r)

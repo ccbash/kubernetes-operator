@@ -36,13 +36,13 @@ type NBServicePolicyReconciler struct {
 // +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes,verbs=get;list;watch
 
 func (r *NBServicePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := ctrl.Log.WithName("NBServicePolicy").WithValues("namespace", req.Namespace, "name", req.Name)
+	logger := ctrl.LoggerFrom(ctx)
 
 	policy := &nbv1alpha1.NBServicePolicy{}
 	if err := r.Get(ctx, req.NamespacedName, policy); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	logger.Info("reconciling service policy")
+	logger.V(1).Info("reconciling service policy")
 	if !policy.DeletionTimestamp.IsZero() {
 		return ctrl.Result{}, nil
 	}
@@ -114,6 +114,7 @@ func (r *NBServicePolicyReconciler) conflictingPolicy(ctx context.Context, polic
 func (r *NBServicePolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&nbv1alpha1.NBServicePolicy{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		WithLogConstructor(logConstructor(mgr, "NBServicePolicy")).
 		Watches(&gwv1.HTTPRoute{}, handler.EnqueueRequestsFromMapFunc(r.policiesForRoute)).
 		Complete(r)
 }

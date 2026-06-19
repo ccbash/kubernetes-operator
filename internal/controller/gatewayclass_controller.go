@@ -44,7 +44,7 @@ func (r *GatewayClassReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return r.reconcileDelete(ctx, sp, gwc)
 	}
 
-	ctrl.LoggerFrom(ctx).Info("reconciling gateway class")
+	ctrl.LoggerFrom(ctx).V(1).Info("reconciling gateway class")
 
 	// Validate configuration.
 	message := func() string {
@@ -111,5 +111,6 @@ func (r *GatewayClassReconciler) reconcileDelete(ctx context.Context, sp *patch.
 func (r *GatewayClassReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&gwv1.GatewayClass{}).
+		WithLogConstructor(logConstructor(mgr, "GatewayClass")).
 		Complete(r)
 }
