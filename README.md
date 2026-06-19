@@ -1,4 +1,4 @@
-# NetBird Kubernetes Operator
+# NetBird Kubernetes Operator.
 
 The NetBird Kubernetes Operator brings NetBird network access into the Kubernetes
 API. It manages NetBird networks, routers, resources, groups, setup keys and peers
