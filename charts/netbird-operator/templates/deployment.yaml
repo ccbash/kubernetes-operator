@@ -31,7 +31,10 @@ spec:
       securityContext:
         {{- toYaml .Values.operator.podSecurityContext | nindent 8 }}
       containers:
-        - name: {{ .Chart.Name }}
+        # Container names must be DNS labels (no dots), so sanitize — a dev/CI
+        # chart name like "netbird-operator-release-v0.9.x" would otherwise be
+        # rejected.
+        - name: {{ include "netbird-operator.name" . | replace "." "-" | trunc 63 | trimSuffix "-" }}
           securityContext:
             {{- toYaml .Values.operator.securityContext | nindent 12 }}
           image: "{{ .Values.operator.image.registry }}/{{ .Values.operator.image.repository }}:{{ .Values.operator.image.tag | default .Chart.AppVersion }}"
