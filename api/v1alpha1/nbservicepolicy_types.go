@@ -90,13 +90,6 @@ type NBServicePolicySpec struct {
 	// +optional
 	Upstream UpstreamMode `json:"upstream,omitempty"`
 
-	// RoutingMode is deprecated and ignored — HTTP exposure now uses reverse-proxy
-	// cluster targets (see ProxyCluster/Upstream). It is scheduled for removal.
-	//
-	// Deprecated: use ProxyCluster/Upstream; this field no longer has any effect.
-	// +optional
-	RoutingMode RoutingMode `json:"routingMode,omitempty"`
-
 	// Private, when true, makes the service NetBird-only: inbound peers
 	// authenticate via their tunnel identity (no OIDC) and an ACL policy is
 	// auto-generated from AccessGroups. Requires an HTTP service.

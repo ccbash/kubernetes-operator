@@ -165,16 +165,6 @@ spec:
                   RewriteRedirects, when true, rewrites Location headers in backend
                   responses to replace the backend address with the public domain.
                 type: boolean
-              routingMode:
-                description: |-
-                  RoutingMode is deprecated and ignored — HTTP exposure now uses reverse-proxy
-                  cluster targets (see ProxyCluster/Upstream). It is scheduled for removal.
-
-                  Deprecated: use ProxyCluster/Upstream; this field no longer has any effect.
-                enum:
-                - ip
-                - domain
-                type: string
               targetRefs:
                 description: |-
                   TargetRefs identify the HTTPRoute(s) this policy attaches to, following

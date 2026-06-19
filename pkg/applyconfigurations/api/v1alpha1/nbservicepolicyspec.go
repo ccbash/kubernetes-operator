@@ -27,11 +27,6 @@ type NBServicePolicySpecApplyConfiguration struct {
 	// "hostname" (default) targets the Service FQDN so the proxy resolves it via
 	// NetBird DNS (IPv4/IPv6 transparent); "ip" targets the ClusterIP directly.
 	Upstream *apiv1alpha1.UpstreamMode `json:"upstream,omitempty"`
-	// RoutingMode is deprecated and ignored — HTTP exposure now uses reverse-proxy
-	// cluster targets (see ProxyCluster/Upstream). It is scheduled for removal.
-	//
-	// Deprecated: use ProxyCluster/Upstream; this field no longer has any effect.
-	RoutingMode *apiv1alpha1.RoutingMode `json:"routingMode,omitempty"`
 	// Private, when true, makes the service NetBird-only: inbound peers
 	// authenticate via their tunnel identity (no OIDC) and an ACL policy is
 	// auto-generated from AccessGroups. Requires an HTTP service.
@@ -82,14 +77,6 @@ func (b *NBServicePolicySpecApplyConfiguration) WithProxyCluster(value string) *
 // If called multiple times, the Upstream field is set to the value of the last call.
 func (b *NBServicePolicySpecApplyConfiguration) WithUpstream(value apiv1alpha1.UpstreamMode) *NBServicePolicySpecApplyConfiguration {
 	b.Upstream = &value
-	return b
-}
-
-// WithRoutingMode sets the RoutingMode field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the RoutingMode field is set to the value of the last call.
-func (b *NBServicePolicySpecApplyConfiguration) WithRoutingMode(value apiv1alpha1.RoutingMode) *NBServicePolicySpecApplyConfiguration {
-	b.RoutingMode = &value
 	return b
 }
 
