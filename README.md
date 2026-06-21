@@ -120,7 +120,7 @@ for management-side setup.
 | [Group](docs/api-reference.md#group) | A NetBird group |
 | [SetupKey](docs/api-reference.md#setupkey) | A NetBird setup key |
 | [SidecarProfile](docs/api-reference.md#sidecarprofile) | Sidecar peer injection profile |
-| [ClusterProxy](docs/api-reference.md#clusterproxy) | Cluster-API proxy |
+| [ClusterProxy](docs/api-reference.md#clusterproxy) | Put the Kubernetes API server on the mesh; `kubectl` over NetBird with group→RBAC impersonation ([flow](docs/architecture.md#cluster-api-proxy)) |
 
 Full field reference: [`docs/api-reference.md`](docs/api-reference.md).
 
