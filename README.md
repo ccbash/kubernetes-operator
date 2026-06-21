@@ -1,5 +1,27 @@
 # NetBird Kubernetes Operator.
 
+> **A divergent fork.** This project began as a fork of the official
+> [`netbirdio/kubernetes-operator`](https://github.com/netbirdio/kubernetes-operator),
+> but has since been re-architected and now differs substantially from it. The
+> key differences:
+>
+> - **NetBird CRDs mirror the NetBird API 1:1** — thin `Network`,
+>   `NetworkResource`, `DNSZone`, `DNSRecord`, `ReverseProxyService`, `Group`,
+>   `SetupKey`, all driven by a single generic reconciler — instead of a few fat,
+>   overloaded CRDs.
+> - **Exposure is built on `Service type=LoadBalancer`, not the Gateway API.** It
+>   advertises LB IPs (allocated by your existing LB/IPAM — Cilium LB-IPAM,
+>   MetalLB, a cloud LB) and **never routes ClusterIPs**; the operator ships no
+>   `Gateway`/`GatewayClass` of its own.
+> - **Routing peers are pluggable** — reuse an existing NetBird group (e.g. the
+>   host-level netbird already on your nodes) or let the operator deploy a
+>   `hostNetwork` DaemonSet.
+> - **One exposure primitive, `ReverseProxyService`**, for both internal and
+>   external publishing, with transparent dualstack DNS.
+>
+> If you want the upstream behaviour (Gateway API, ClusterIP routing), use the
+> official operator instead.
+
 The NetBird Kubernetes Operator brings NetBird network access into the Kubernetes
 API. NetBird API objects — networks, routers, resources, DNS zones and records,
 groups, setup keys, reverse-proxy services — are mirrored 1:1 as custom
