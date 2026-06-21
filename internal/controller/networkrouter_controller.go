@@ -67,6 +67,11 @@ func (r *NetworkRouterReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if err != nil {
 		return r.dependency(ctx, sp, nr, err)
 	}
+	// If the network was recreated under a new id, the recorded router is gone
+	// with the old network — recreate it.
+	if nr.Status.NetworkID != "" && nr.Status.NetworkID != networkID {
+		nr.Status.RouterID = ""
+	}
 	nr.Status.NetworkID = networkID
 
 	groupID, err := r.resolvePeerGroup(ctx, nr)
@@ -180,14 +185,20 @@ func (r *NetworkRouterReconciler) upsertRouter(ctx context.Context, networkID, r
 		Metric:     spec.Metric,
 		PeerGroups: &peerGroups,
 	}
+	// Verify the recorded router still exists (clean 404 on GET => recreate).
 	if routerID != "" {
-		resp, err := routers.Update(ctx, routerID, req)
-		if err == nil {
-			return resp.Id, nil
-		}
-		if !netbird.IsNotFound(err) {
+		if _, err := routers.Get(ctx, routerID); netbird.IsNotFound(err) {
+			routerID = ""
+		} else if err != nil {
 			return "", err
 		}
+	}
+	if routerID != "" {
+		resp, err := routers.Update(ctx, routerID, req)
+		if err != nil {
+			return "", err
+		}
+		return resp.Id, nil
 	}
 	resp, err := routers.Create(ctx, req)
 	if err != nil {

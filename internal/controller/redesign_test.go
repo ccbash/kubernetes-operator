@@ -221,4 +221,20 @@ var _ = Describe("LoadBalancer-IP translation", func() {
 			Expect(*target.Options.DirectUpstream).To(BeTrue())
 		})
 	})
+
+	Describe("out-of-band deletion recovery", func() {
+		It("Network recreates when its NetBird network was deleted out of band", func() {
+			network := readyNetwork()
+			oldID := network.Status.NetworkID
+
+			// Simulate manual NetBird cleanup.
+			Expect(nbClient.Networks.Delete(ctx, oldID)).To(Succeed())
+
+			_, err := reconcileOnce(NewNetworkReconciler(k8sClient, nbClient, nil), ns)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(network), network)).To(Succeed())
+			Expect(network.Status.NetworkID).NotTo(BeEmpty())
+			Expect(network.Status.NetworkID).NotTo(Equal(oldID))
+		})
+	})
 })

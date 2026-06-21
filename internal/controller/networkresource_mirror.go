@@ -42,6 +42,11 @@ func applyNetworkResource(ctx context.Context, nb *netbird.Client, c client.Clie
 	if err != nil {
 		return err
 	}
+	// If the network was recreated under a new id (out-of-band deletion), the
+	// recorded resource lived in the old network — drop it and recreate.
+	if nr.Status.NetworkID != "" && nr.Status.NetworkID != networkID {
+		nr.Status.ResourceID = ""
+	}
 	nr.Status.NetworkID = networkID
 
 	groupIDs, err := netbirdutil.GetGroupIDs(ctx, c, nb, nr.Spec.Groups, nr.Namespace)
@@ -63,15 +68,21 @@ func applyNetworkResource(ctx context.Context, nb *netbird.Client, c client.Clie
 	}
 
 	resources := nb.Networks.Resources(networkID)
+	// Verify the recorded resource still exists (clean 404 on GET => recreate).
 	if nr.Status.ResourceID != "" {
-		resp, err := resources.Update(ctx, nr.Status.ResourceID, req)
-		if err == nil {
-			nr.Status.ResourceID = resp.Id
-			return nil
-		}
-		if !netbird.IsNotFound(err) {
+		if _, err := resources.Get(ctx, nr.Status.ResourceID); netbird.IsNotFound(err) {
+			nr.Status.ResourceID = ""
+		} else if err != nil {
 			return err
 		}
+	}
+	if nr.Status.ResourceID != "" {
+		resp, err := resources.Update(ctx, nr.Status.ResourceID, req)
+		if err != nil {
+			return err
+		}
+		nr.Status.ResourceID = resp.Id
+		return nil
 	}
 	resp, err := resources.Create(ctx, req)
 	if err != nil {
