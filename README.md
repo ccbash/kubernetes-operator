@@ -23,46 +23,19 @@
 > official operator instead.
 
 The NetBird Kubernetes Operator brings NetBird network access into the Kubernetes
-API. NetBird API objects — networks, routers, resources, DNS zones and records,
-groups, setup keys, reverse-proxy services — are mirrored 1:1 as custom
-resources, and the operator translates Kubernetes **`Service type=LoadBalancer`**
-addresses into NetBird reachability and exposure. Everything is declarative and
-reconciled, so NetBird access is managed the same way as the rest of your
-cluster.
-
-See [`docs/architecture.md`](docs/architecture.md) for the design.
+API: NetBird API objects are managed as custom resources, and in-cluster
+`Service type=LoadBalancer` addresses are advertised over the NetBird mesh.
+Everything is declarative and reconciled. See
+[`docs/architecture.md`](docs/architecture.md) for the design.
 
 ## Why LoadBalancer addresses
 
-The operator makes a Service's **LoadBalancer IP** reachable over NetBird — never
-its ClusterIP. ClusterIPs come from a huge, unpredictably-allocated service CIDR
-that is identical on every default cluster, so routing them across your
-infrastructure invites collisions; an LB CIDR is small, deliberately chosen and
-collision-free. IP allocation is left to your existing load balancer (Cilium
-LB-IPAM, MetalLB, kgateway, a cloud LB); the operator owns only the NetBird
-overlay and DNS.
-
-## Features
-
-**NetBird-mirror CRDs**
-
-* Thin, 1:1 mirrors of NetBird API objects — `Network`, `NetworkRouter`,
-  `NetworkResource`, `DNSZone`, `DNSRecord`, `ReverseProxyService`, `Group`,
-  `SetupKey`. Each reconciles its spec straight to the NetBird Management API.
-* **Routing peers, your way** — a `NetworkRouter` either reuses an existing
-  NetBird group (e.g. host-level netbird on your nodes) or deploys a
-  `hostNetwork` netbird-client DaemonSet.
-
-**Translation & exposure**
-
-* **Automatic reachability** — every `Service type=LoadBalancer` is advertised
-  into a NetBird network (default-on; opt out per namespace/Service with the
-  `netbird.io/advertise` annotation). Per LB ingress IP family the operator
-  creates a `NetworkResource` (the IP) and a `DNSRecord` (`<svc>-<ns>.<zone>`,
-  A + AAAA) — one **dualstack** name per Service.
-* **Reverse-proxy exposure** — a `ReverseProxyService` publishes Services
-  through NetBird's reverse proxy, **internally or externally**, targeting each
-  backend Service's dualstack DNS name with path awareness.
+The operator routes a Service's **LoadBalancer IP**, never its ClusterIP.
+ClusterIPs come from a huge, unpredictably-allocated service CIDR that is
+identical on every default cluster, so routing them across your infrastructure
+invites collisions; an LB CIDR is small, deliberately chosen and collision-free.
+The operator owns only the NetBird overlay and DNS — your existing LB/IPAM
+allocates the addresses.
 
 ## How it works
 
@@ -72,9 +45,11 @@ overlay and DNS.
 2. A **`DNSZone`** (admin-authored or adopted by name) holds the per-service
    records.
 3. Give a Service `type: LoadBalancer` (any LB / IPAM allocates the IP) and the
-   operator advertises it: a `NetworkResource` + `DNSRecord` per IP family.
-4. To publish a Service through the reverse proxy, author a
-   **`ReverseProxyService`** referencing it.
+   operator advertises it: a `NetworkResource` + `DNSRecord` (A + AAAA — one
+   dualstack name) per IP family. Default-on; opt out per namespace/Service with
+   the `netbird.io/advertise` annotation.
+4. To publish a Service through the reverse proxy (internal or external), author
+   a **`ReverseProxyService`** referencing it.
 
 ## Quick start
 
