@@ -309,7 +309,7 @@ var _ = Describe("LoadBalancer-IP translation", func() {
 			svc := services[0]
 			// tcp/udp route by port, so the service domain is a synthesized
 			// per-port subdomain of the shared public host.
-			Expect(svc.Domain).To(Equal("tcp-25.mail.example.com"))
+			Expect(svc.Domain).To(Equal("25-tcp.mail.example.com"))
 			Expect(svc.Mode).NotTo(BeNil())
 			Expect(*svc.Mode).To(Equal(api.ServiceMode(api.ServiceRequestModeTcp)))
 			Expect(svc.ListenPort).NotTo(BeNil())
@@ -327,7 +327,7 @@ var _ = Describe("LoadBalancer-IP translation", func() {
 
 			// The synthesized domain is surfaced in status for transparency.
 			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(rps), rps)).To(Succeed())
-			Expect(rps.Status.ServiceDomain).To(Equal("tcp-25.mail.example.com"))
+			Expect(rps.Status.ServiceDomain).To(Equal("25-tcp.mail.example.com"))
 		})
 
 		It("publishes several L4 ports under one host as distinct per-port domains", func() {
@@ -363,7 +363,7 @@ var _ = Describe("LoadBalancer-IP translation", func() {
 			domains := []string{services[0].Domain, services[1].Domain}
 			// Distinct NetBird domains (so NetBird's one-service-per-domain rule
 			// is satisfied) under the one shared host.
-			Expect(domains).To(ConsistOf("tcp-25.mail.example.com", "tcp-465.mail.example.com"))
+			Expect(domains).To(ConsistOf("25-tcp.mail.example.com", "465-tcp.mail.example.com"))
 		})
 
 		It("defaults to the backend Service's first port when none is given", func() {

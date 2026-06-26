@@ -215,12 +215,13 @@ func sortServiceTargets(targets []api.ServiceTarget) {
 // serviceDomain returns the domain to register with NetBird. http (Host
 // routing) and tls (SNI) keep the public host verbatim. tcp/udp route by listen
 // port and NetBird permits only one service per domain, so each port is
-// published under a distinct subdomain "<mode>-<listenPort>.<host>" — unique
-// across mode+port, and still a subdomain of host so it derives the same proxy
-// cluster (suffix match) without needing its own public DNS.
+// published under a distinct subdomain "<listenPort>-<mode>.<host>" — port first
+// so entries read and sort by port; unique across port+mode, and still a
+// subdomain of host so it derives the same proxy cluster (suffix match) without
+// needing its own public DNS.
 func serviceDomain(mode api.ServiceRequestMode, host string, listenPort *int) string {
 	if (mode == api.ServiceRequestModeTcp || mode == api.ServiceRequestModeUdp) && listenPort != nil {
-		return fmt.Sprintf("%s-%d.%s", mode, *listenPort, host)
+		return fmt.Sprintf("%d-%s.%s", *listenPort, mode, host)
 	}
 	return host
 }

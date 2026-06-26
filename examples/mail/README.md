@@ -15,8 +15,8 @@ those two facts together:
   `domain: mail.example.com` and `proxyCluster`, each with a distinct
   `listenPort` and `mode: tcp`.
 - The operator registers each port under a distinct per-port subdomain
-  `tcp-<listenPort>.mail.example.com` (surfaced in `status.serviceDomain`) so
-  NetBird's one-service-per-domain rule is satisfied.
+  `<listenPort>-tcp.mail.example.com` (e.g. `25-tcp.…`, `465-tcp.…`; surfaced in
+  `status.serviceDomain`) so NetBird's one-service-per-domain rule is satisfied.
 - Clients still connect to `mail.example.com:<port>` — the synthesized
   subdomains are internal and need no DNS of their own.
 

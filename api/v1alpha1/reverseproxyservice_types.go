@@ -135,7 +135,7 @@ type ReverseProxyServiceSpec struct {
 	// the service domain verbatim (HTTP routing / TLS SNI). For mode=tcp/udp it
 	// is the shared host: NetBird allows only one service per domain, and L4
 	// connections route by listen port (no SNI), so the operator publishes each
-	// port as a distinct per-port subdomain (<mode>-<listenPort>.<Domain>, shown
+	// port as a distinct per-port subdomain (<listenPort>-<mode>.<Domain>, shown
 	// in status.serviceDomain) under this host. Expose several L4 ports under one
 	// hostname with one CR per port, all sharing this Domain. The host must
 	// resolve to a proxy cluster (be the cluster address, its subdomain, or a
@@ -191,7 +191,7 @@ type ReverseProxyServiceStatus struct {
 
 	// ServiceDomain is the domain actually registered with NetBird. It equals
 	// spec.domain for http/tls, and the synthesized per-port subdomain
-	// (<mode>-<listenPort>.<spec.domain>) for tcp/udp.
+	// (<listenPort>-<mode>.<spec.domain>) for tcp/udp.
 	// +optional
 	ServiceDomain string `json:"serviceDomain,omitempty"`
 }
