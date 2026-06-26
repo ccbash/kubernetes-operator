@@ -81,6 +81,12 @@ type ReverseProxyClusterStatus struct {
 	// +optional
 	TokenID string `json:"tokenID,omitempty"`
 
+	// DomainID is the id of the registered NetBird custom domain (Domain ->
+	// ClusterAddress), so service domains under it derive this cluster. Removed
+	// when the cluster is deleted.
+	// +optional
+	DomainID string `json:"domainID,omitempty"`
+
 	// LoadBalancerIP is the proxy Service's assigned ingress IP — what the A
 	// record points at.
 	// +optional

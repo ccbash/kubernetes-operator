@@ -539,6 +539,7 @@ var _ = Describe("LoadBalancer-IP translation", func() {
 			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(rpc), rpc)).To(Succeed())
 			Expect(rpc.Status.LoadBalancerIP).To(Equal("192.0.2.50"))
 			Expect(rpc.Status.ClusterAddress).To(Equal("gate.ccbash.cloud"))
+			Expect(rpc.Status.DomainID).NotTo(BeEmpty()) // custom domain registered
 			Expect(meta.IsStatusConditionTrue(rpc.Status.Conditions, nbv1alpha1.ReadyCondition)).To(BeTrue())
 		})
 	})

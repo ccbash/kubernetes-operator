@@ -220,6 +220,12 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              domainID:
+                description: |-
+                  DomainID is the id of the registered NetBird custom domain (Domain ->
+                  ClusterAddress), so service domains under it derive this cluster. Removed
+                  when the cluster is deleted.
+                type: string
               loadBalancerIP:
                 description: |-
                   LoadBalancerIP is the proxy Service's assigned ingress IP — what the A

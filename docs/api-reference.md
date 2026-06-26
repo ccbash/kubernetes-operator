@@ -681,6 +681,7 @@ _Appears in:_
 | `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#condition-v1-meta) array_ | Conditions holds the conditions for the ReverseProxyCluster. |  | Optional: \{\} <br /> |
 | `clusterAddress` _string_ | ClusterAddress echoes the registered cluster address once the proxy has<br />enrolled (resolvable via the Management API). |  | Optional: \{\} <br /> |
 | `tokenID` _string_ | TokenID is the id of the minted proxy token (revoked when the cluster is<br />deleted). |  | Optional: \{\} <br /> |
+| `domainID` _string_ | DomainID is the id of the registered NetBird custom domain (Domain -><br />ClusterAddress), so service domains under it derive this cluster. Removed<br />when the cluster is deleted. |  | Optional: \{\} <br /> |
 | `loadBalancerIP` _string_ | LoadBalancerIP is the proxy Service's assigned ingress IP — what the A<br />record points at. |  | Optional: \{\} <br /> |
 
 

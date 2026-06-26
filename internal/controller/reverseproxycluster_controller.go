@@ -140,6 +140,42 @@ func (r *ReverseProxyClusterReconciler) Reconcile(ctx context.Context, req ctrl.
 	}
 	rpc.Status.ClusterAddress = rpc.Spec.ClusterAddress
 
+	// 6. Register the custom domain (Domain -> this cluster) so service domains
+	//    under it derive the cluster. Adopt an existing registration if present.
+	if rpc.Status.DomainID == "" {
+		domains, err := r.Netbird.ReverseProxyDomains.List(ctx)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		for _, d := range domains {
+			if d.Domain == rpc.Spec.Domain {
+				rpc.Status.DomainID = d.Id
+				break
+			}
+		}
+		if rpc.Status.DomainID == "" {
+			resp, err := r.Netbird.ReverseProxyDomains.Create(ctx, api.ReverseProxyDomainRequest{
+				Domain:        rpc.Spec.Domain,
+				TargetCluster: rpc.Spec.ClusterAddress,
+			})
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			rpc.Status.DomainID = resp.Id
+		}
+		if err := sp.Patch(ctx, rpc); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+	// Trigger/confirm validation; requeue until it passes (DNS may still be settling).
+	if err := r.Netbird.ReverseProxyDomains.Validate(ctx, rpc.Status.DomainID); err != nil {
+		conditions.MarkFalse(rpc, nbv1alpha1.ReadyCondition, nbv1alpha1.DependencyReason, "validating custom domain %s: %s", rpc.Spec.Domain, err.Error())
+		if perr := sp.Patch(ctx, rpc); perr != nil {
+			return ctrl.Result{}, perr
+		}
+		return ctrl.Result{RequeueAfter: dependencyRetry}, nil
+	}
+
 	conditions.MarkTrue(rpc, nbv1alpha1.ReadyCondition, nbv1alpha1.ReconciledReason, "")
 	if err := sp.Patch(ctx, rpc, patch.WithStatusObservedGeneration{}); err != nil {
 		return ctrl.Result{}, err
@@ -152,6 +188,11 @@ func (r *ReverseProxyClusterReconciler) reconcileDelete(ctx context.Context, sp 
 	// (Secret/Deployment/Service/DNS*) GC via owner refs.
 	if rpc.Status.TokenID != "" {
 		if err := r.Netbird.ReverseProxyTokens.Delete(ctx, rpc.Status.TokenID); err != nil && !netbird.IsNotFound(err) {
+			return ctrl.Result{}, err
+		}
+	}
+	if rpc.Status.DomainID != "" {
+		if err := r.Netbird.ReverseProxyDomains.Delete(ctx, rpc.Status.DomainID); err != nil && !netbird.IsNotFound(err) {
 			return ctrl.Result{}, err
 		}
 	}
