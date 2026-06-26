@@ -406,8 +406,21 @@ var _ = Describe("LoadBalancer-IP translation", func() {
 			}
 			Expect(k8sClient.Create(ctx, rps)).To(Succeed())
 			_, err = reconcileOnce(NewReverseProxyServiceReconciler(k8sClient, nbClient, nil), "mail-smtp")
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("set backends[].port explicitly"))
+			// A spec error is surfaced as a not-Ready condition, not a hard error
+			// (no requeue storm / stacktrace).
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(rps), rps)).To(Succeed())
+			cond := meta.FindStatusCondition(rps.Status.Conditions, nbv1alpha1.ReadyCondition)
+			Expect(cond).NotTo(BeNil())
+			Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+			Expect(cond.Reason).To(Equal(nbv1alpha1.InvalidSpecReason))
+			Expect(cond.Message).To(ContainSubstring("set backends[].port explicitly"))
+
+			// Nothing was created in NetBird.
+			services, err := nbClient.ReverseProxyServices.List(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(services).To(BeEmpty())
 		})
 	})
 

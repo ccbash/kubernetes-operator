@@ -14,6 +14,7 @@ const (
 	reasonDependencyNotReady = "DependencyNotReady"
 	reasonInUse              = "InUse"
 	reasonAdvertised         = "Advertised"
+	reasonInvalidSpec        = "InvalidSpec"
 )
 
 // recordEvent emits a Warning Kubernetes Event for obj, tolerating a nil

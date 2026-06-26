@@ -194,7 +194,7 @@ func backendPort(ctx context.Context, c client.Client, namespace, svcName string
 	case 1:
 		return int(svc.Spec.Ports[0].Port), nil
 	default:
-		return 0, fmt.Errorf("service %s/%s exposes %d ports; set backends[].port explicitly", namespace, svcName, len(svc.Spec.Ports))
+		return 0, fmt.Errorf("%w: service %s/%s exposes %d ports; set backends[].port explicitly", errInvalidSpec, namespace, svcName, len(svc.Spec.Ports))
 	}
 }
 
