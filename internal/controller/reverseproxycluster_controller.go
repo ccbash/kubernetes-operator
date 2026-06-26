@@ -31,8 +31,11 @@ import (
 )
 
 const (
-	proxyTokenKey   = "token"
-	proxyListenPort = 443
+	proxyTokenKey = "token"
+	// proxyListenPort is the proxy's single SNI/HTTP listener — a non-privileged
+	// port so the container needs no NET_BIND_SERVICE. The LoadBalancer Service
+	// maps the public 80/443 onto it.
+	proxyListenPort = 8443
 	proxyHealthPort = 8080
 )
 
@@ -249,8 +252,7 @@ func (r *ReverseProxyClusterReconciler) applyDeployment(ctx context.Context, rpc
 			WithHTTPGet(corev1ac.HTTPGetAction().WithPath("/healthz/live").WithPort(intstr.FromInt(proxyHealthPort)))).
 		WithSecurityContext(corev1ac.SecurityContext().
 			WithAllowPrivilegeEscalation(false).
-			// NET_BIND_SERVICE so the non-root proxy can bind :443 (and :80).
-			WithCapabilities(corev1ac.Capabilities().WithDrop("ALL").WithAdd("NET_BIND_SERVICE"))).
+			WithCapabilities(corev1ac.Capabilities().WithDrop("ALL"))).
 		WithResources(corev1ac.ResourceRequirements().
 			WithRequests(corev1.ResourceList{
 				corev1.ResourceCPU:    resource.MustParse("100m"),
@@ -284,7 +286,12 @@ func (r *ReverseProxyClusterReconciler) applyService(ctx context.Context, rpc *n
 		WithSpec(corev1ac.ServiceSpec().
 			WithType(corev1.ServiceTypeLoadBalancer).
 			WithSelector(proxySelectorLabels(rpc)).
-			WithPorts(corev1ac.ServicePort().WithName("https").WithPort(proxyListenPort).WithTargetPort(intstr.FromInt(proxyListenPort))))
+			WithPorts(
+				// Public 80 and 443 both map onto the proxy's single listener,
+				// which detects TLS vs plain HTTP (SNI router).
+				corev1ac.ServicePort().WithName("http").WithPort(80).WithTargetPort(intstr.FromInt(proxyListenPort)),
+				corev1ac.ServicePort().WithName("https").WithPort(443).WithTargetPort(intstr.FromInt(proxyListenPort)),
+			))
 	if len(rpc.Spec.ServiceAnnotations) > 0 {
 		svcAC.WithAnnotations(rpc.Spec.ServiceAnnotations)
 	}
