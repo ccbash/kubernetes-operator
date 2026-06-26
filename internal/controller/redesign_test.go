@@ -494,6 +494,9 @@ var _ = Describe("LoadBalancer-IP translation", func() {
 			Expect(envValue(env, "NB_PROXY_DOMAIN")).To(Equal("gate.ccbash.cloud"))
 			Expect(envValue(env, "NB_PROXY_MANAGEMENT_ADDRESS")).To(Equal("https://mgmt.test"))
 			Expect(dep.Spec.Template.Spec.Containers[0].Image).To(Equal("netbirdio/reverse-proxy:latest"))
+			// Needs NET_BIND_SERVICE to bind :443 as non-root, and HTTP health probes.
+			Expect(dep.Spec.Template.Spec.Containers[0].SecurityContext.Capabilities.Add).To(ContainElement(corev1.Capability("NET_BIND_SERVICE")))
+			Expect(dep.Spec.Template.Spec.Containers[0].ReadinessProbe.HTTPGet.Path).To(Equal("/healthz/ready"))
 
 			svc := &corev1.Service{}
 			Expect(k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: ns}, svc)).To(Succeed())

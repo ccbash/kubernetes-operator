@@ -240,11 +240,17 @@ func (r *ReverseProxyClusterReconciler) applyDeployment(ctx context.Context, rpc
 			corev1ac.EnvVar().WithName("NB_PROXY_TOKEN").WithValueFrom(corev1ac.EnvVarSource().
 				WithSecretKeyRef(corev1ac.SecretKeySelector().WithName(proxyResourceName(rpc)).WithKey(proxyTokenKey))),
 		).
-		WithReadinessProbe(corev1ac.Probe().WithTCPSocket(corev1ac.TCPSocketAction().WithPort(intstr.FromInt(proxyListenPort)))).
-		WithLivenessProbe(corev1ac.Probe().WithTCPSocket(corev1ac.TCPSocketAction().WithPort(intstr.FromInt(proxyListenPort)))).
+		WithStartupProbe(corev1ac.Probe().
+			WithHTTPGet(corev1ac.HTTPGetAction().WithPath("/healthz/startup").WithPort(intstr.FromInt(proxyHealthPort))).
+			WithFailureThreshold(30).WithPeriodSeconds(2)).
+		WithReadinessProbe(corev1ac.Probe().
+			WithHTTPGet(corev1ac.HTTPGetAction().WithPath("/healthz/ready").WithPort(intstr.FromInt(proxyHealthPort)))).
+		WithLivenessProbe(corev1ac.Probe().
+			WithHTTPGet(corev1ac.HTTPGetAction().WithPath("/healthz/live").WithPort(intstr.FromInt(proxyHealthPort)))).
 		WithSecurityContext(corev1ac.SecurityContext().
 			WithAllowPrivilegeEscalation(false).
-			WithCapabilities(corev1ac.Capabilities().WithDrop("ALL"))).
+			// NET_BIND_SERVICE so the non-root proxy can bind :443 (and :80).
+			WithCapabilities(corev1ac.Capabilities().WithDrop("ALL").WithAdd("NET_BIND_SERVICE"))).
 		WithResources(corev1ac.ResourceRequirements().
 			WithRequests(corev1.ResourceList{
 				corev1.ResourceCPU:    resource.MustParse("100m"),
