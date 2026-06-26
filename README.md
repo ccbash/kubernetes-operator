@@ -44,8 +44,18 @@ on-prem you supply one, e.g. [MetalLB](https://metallb.io/),
 ## How it works
 
 1. A **`Network`** mirrors a NetBird network. A **`NetworkRouter`** binds the
-   routing peers to it — `peers.group` reuses an existing group, or
-   `peers.deploy` runs a DaemonSet.
+   **routing peers** to it — the NetBird peers that actually carry traffic to the
+   advertised LoadBalancer IPs. You pick one of two ways to provide them, and the
+   operator configures the `NetworkRouter` either way:
+
+   - **Reuse existing peers** (`peers.group`) — point at the NetBird group the
+     host-level netbird clients already running on your cluster nodes auto-join.
+     The operator creates **only** the router and deploys nothing.
+   - **Deploy peers** (`peers.deploy`) — the operator runs a `hostNetwork`
+     `netbird-client` **DaemonSet** as the routing peers and manages its `Group`,
+     `SetupKey`, and DaemonSet, wiring the router to it automatically. Use this
+     when your nodes don't already run netbird.
+
 2. A **`DNSZone`** (admin-authored or adopted by name) holds the per-service
    records.
 3. Give a Service `type: LoadBalancer` (any LB / IPAM allocates the IP) and the
