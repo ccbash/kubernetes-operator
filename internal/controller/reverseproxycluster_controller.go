@@ -5,6 +5,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/fluxcd/pkg/runtime/conditions"
 	"github.com/fluxcd/pkg/runtime/patch"
@@ -281,6 +282,9 @@ func (r *ReverseProxyClusterReconciler) applyDeployment(ctx context.Context, rpc
 			corev1ac.EnvVar().WithName("NB_PROXY_HEALTH_ADDRESS").WithValue(fmt.Sprintf(":%d", proxyHealthPort)),
 			corev1ac.EnvVar().WithName("NB_PROXY_ACME_CERTIFICATES").WithValue("false"),
 			corev1ac.EnvVar().WithName("NB_PROXY_CERTIFICATE_DIRECTORY").WithValue("/certs"),
+			// Run an embedded netbird client (userspace WG) so the cluster can serve
+			// NetBird-Only (private) services.
+			corev1ac.EnvVar().WithName("NB_PROXY_PRIVATE").WithValue(strconv.FormatBool(rpc.Spec.Private)),
 			corev1ac.EnvVar().WithName("NB_PROXY_TOKEN").WithValueFrom(corev1ac.EnvVarSource().
 				WithSecretKeyRef(corev1ac.SecretKeySelector().WithName(proxyResourceName(rpc)).WithKey(proxyTokenKey))),
 		).

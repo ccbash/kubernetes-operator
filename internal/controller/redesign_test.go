@@ -469,6 +469,7 @@ var _ = Describe("LoadBalancer-IP translation", func() {
 					Domain:         "ccbash.cloud",
 					CertSecretName: "wildcard-tls",
 					Groups:         []nbv1alpha1.GroupReference{{Name: &all}},
+					Private:        true,
 				},
 			}
 			Expect(k8sClient.Create(ctx, rpc)).To(Succeed())
@@ -491,6 +492,7 @@ var _ = Describe("LoadBalancer-IP translation", func() {
 			Expect(dep.Spec.Template.Spec.Containers[0].Image).To(Equal("netbirdio/reverse-proxy:latest"))
 			// Proxy listens on a non-privileged port; HTTP health probes on :8080.
 			Expect(envValue(env, "NB_PROXY_ADDRESS")).To(Equal(":8443"))
+			Expect(envValue(env, "NB_PROXY_PRIVATE")).To(Equal("true")) // embedded peer for NetBird-Only services
 			Expect(dep.Spec.Template.Spec.Containers[0].ReadinessProbe.HTTPGet.Path).To(Equal("/healthz/ready"))
 
 			svc := &corev1.Service{}

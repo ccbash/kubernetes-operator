@@ -659,6 +659,7 @@ _Appears in:_
 | `zoneRef` _[CrossNamespaceReference](#crossnamespacereference)_ | ZoneRef references an existing DNSZone for Domain instead of creating one. |  | Optional: \{\} <br /> |
 | `certSecretName` _string_ | CertSecretName is a kubernetes.io/tls Secret (tls.crt/tls.key) in the same<br />namespace — typically a cert-manager wildcard for Domain — mounted into the<br />proxy as its static TLS certificate. The proxy does no ACME. |  | Optional: \{\} <br /> |
 | `groups` _[GroupReference](#groupreference) array_ | Groups are NetBird groups the proxy's advertised LoadBalancer resource<br />joins, so access policies can target it. |  | Optional: \{\} <br /> |
+| `private` _boolean_ | Private enables NetBird-Only access for services on this cluster. The proxy<br />then runs an embedded netbird client (a mesh peer, userspace WireGuard — no<br />extra privileges), which the cluster needs to serve private (mesh-only)<br />services. Group-based services keep working regardless. |  | Optional: \{\} <br /> |
 | `replicas` _integer_ | Replicas of the proxy Deployment. Defaults to 1. | 1 | Minimum: 1 <br />Optional: \{\} <br /> |
 | `image` _string_ | Image overrides the netbird reverse-proxy image. Defaults to the operator's<br />pinned image. |  | Optional: \{\} <br /> |
 | `serviceAnnotations` _object (keys:string, values:string)_ | ServiceAnnotations are added to the proxy's LoadBalancer Service, e.g. to<br />pin an LB-IPAM pool or request a specific IP. |  | Optional: \{\} <br /> |
