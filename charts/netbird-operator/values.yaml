@@ -158,23 +158,27 @@ netbirdAPI:
 
 #routingClientImage: "netbirdio/netbird:latest"
 
-# Advertise Service type=LoadBalancer into NetBird by default. Override per
-# namespace/Service with the annotation netbird.io/advertise: "true"|"false".
-advertiseLoadBalancers: true
-
-# Comma-separated NetBird groups that advertised resources join by default, so
-# access policies can target them. Override per namespace/Service with the
-# annotation netbird.io/groups. Empty leaves resources group-less (not
-# policy-targetable).
-defaultResourceGroups: ""
-
-# The single NetBird Network and DNSZone that advertised type=LoadBalancer
-# Services attach to: their NetworkResource joins this Network and their
-# <svc>-<ns>.<zone> DNSRecord lands in this DNSZone. These are explicit — proxy
-# (ReverseProxyCluster) zones are never used for LoadBalancer exposure.
+# Everything that drives Service type=LoadBalancer exposure into NetBird.
 loadBalancer:
+  # Advertise type=LoadBalancer Services by default. Override per ns/Service with
+  # the annotation netbird.io/advertise: "true"|"false".
+  advertise: true
+  # Comma-separated NetBird groups the advertised NetworkResource joins (so access
+  # policies can target it). Override with the netbird.io/groups annotation.
+  resourceGroups: ""
+  # The NetBird Network the NetworkResource attaches to. Created elsewhere,
+  # paired with its NetworkRouter (the routing-peer DaemonSet).
   network: ""
-  dnsZone: ""
+  # The DNSZone the <svc>-<ns>.<zone> records land in — created by this chart.
+  # The CR (and the operator's reference) is named after the domain.
+  dnsZone:
+    domain: ""
+    distributionGroups: []
+
+# Enable the Gateway API controllers (GatewayClass/Gateway/HTTPRoute →
+# ReverseProxyCluster/ReverseProxyService). Requires the Gateway API CRDs in the
+# cluster. Auto-on when gateway.enabled below.
+enableGatewayAPI: false
 
 # Enable the Gateway API controllers (GatewayClass/Gateway/HTTPRoute →
 # ReverseProxyCluster/ReverseProxyService). Requires the Gateway API CRDs in the

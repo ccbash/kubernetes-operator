@@ -51,17 +51,17 @@ spec:
           - --health-probe-bind-address=:{{ .Values.operator.livenessProbe.port }}
           - --webhook-cert-path=/tmp/k8s-webhook-server/serving-certs
           - --runtime-namespace=$(POD_NAMESPACE)
-          {{- if not .Values.advertiseLoadBalancers }}
+          {{- if not .Values.loadBalancer.advertise }}
           - --advertise-loadbalancers=false
           {{- end }}
-          {{- if .Values.defaultResourceGroups }}
-          - --default-resource-groups={{ .Values.defaultResourceGroups }}
+          {{- if .Values.loadBalancer.resourceGroups }}
+          - --default-resource-groups={{ .Values.loadBalancer.resourceGroups }}
           {{- end }}
           {{- if .Values.loadBalancer.network }}
           - --loadbalancer-network={{ .Values.loadBalancer.network }}
           {{- end }}
-          {{- if .Values.loadBalancer.dnsZone }}
-          - --loadbalancer-dns-zone={{ .Values.loadBalancer.dnsZone }}
+          {{- if .Values.loadBalancer.dnsZone.domain }}
+          - --loadbalancer-dns-zone={{ .Values.loadBalancer.dnsZone.domain }}
           {{- end }}
           {{- if or .Values.enableGatewayAPI .Values.gateway.enabled }}
           - --enable-gateway-api
