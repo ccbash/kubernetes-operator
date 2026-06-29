@@ -17,6 +17,7 @@ rules:
   - dnsrecords
   - reverseproxyservices
   - reverseproxyclusters
+  - reverseproxyclusterparameters
   - sidecarprofiles
   - clusterproxies
   verbs:
@@ -94,6 +95,7 @@ rules:
   - gateway.networking.k8s.io
   resources:
   - gatewayclasses/status
+  - gateways/status
   - httproutes/status
   verbs:
   - get

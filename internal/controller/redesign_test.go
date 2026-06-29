@@ -551,21 +551,24 @@ var _ = Describe("LoadBalancer-IP translation", func() {
 	})
 
 	Describe("Gateway API translation", func() {
-		It("translates an HTTPRoute on a BYOP Gateway into a ReverseProxyService", func() {
-			// A ReverseProxyCluster supplies the cluster address (not reconciled here).
-			rpc := &nbv1alpha1.ReverseProxyCluster{
-				ObjectMeta: metav1.ObjectMeta{Name: "gate", Namespace: ns},
-				Spec:       nbv1alpha1.ReverseProxyClusterSpec{ClusterAddress: "gate.ccbash.cloud", Domain: "ccbash.cloud"},
+		It("creates a ReverseProxyCluster from a Gateway and translates HTTPRoutes onto it", func() {
+			all := "All"
+			// Cluster-scoped params = the GatewayClass "flavor".
+			params := &nbv1alpha1.ReverseProxyClusterParameters{
+				ObjectMeta: metav1.ObjectMeta{Name: "params-" + ns},
+				Spec: nbv1alpha1.ReverseProxyClusterParametersSpec{
+					Private: true,
+					Groups:  []nbv1alpha1.GroupReference{{Name: &all}},
+				},
 			}
-			Expect(k8sClient.Create(ctx, rpc)).To(Succeed())
+			Expect(k8sClient.Create(ctx, params)).To(Succeed())
 
 			gc := &gwv1.GatewayClass{
 				ObjectMeta: metav1.ObjectMeta{Name: "netbird-" + ns},
 				Spec: gwv1.GatewayClassSpec{
 					ControllerName: "netbird.io/byop-proxy",
 					ParametersRef: &gwv1.ParametersReference{
-						Group: "netbird.io", Kind: "ReverseProxyCluster",
-						Name: "gate", Namespace: ptrTo(gwv1.Namespace(ns)),
+						Group: "netbird.io", Kind: "ReverseProxyClusterParameters", Name: params.Name,
 					},
 				},
 			}
@@ -575,14 +578,43 @@ var _ = Describe("LoadBalancer-IP translation", func() {
 			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(gc), gc)).To(Succeed())
 			Expect(meta.IsStatusConditionTrue(gc.Status.Conditions, string(gwv1.GatewayClassConditionStatusAccepted))).To(BeTrue())
 
+			// Cert Secret the TLS listener references.
+			Expect(k8sClient.Create(ctx, &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "wildcard-tls", Namespace: ns},
+				Type:       corev1.SecretTypeTLS,
+				Data:       map[string][]byte{"tls.crt": []byte("x"), "tls.key": []byte("y")},
+			})).To(Succeed())
+
 			gw := &gwv1.Gateway{
 				ObjectMeta: metav1.ObjectMeta{Name: "web", Namespace: ns},
 				Spec: gwv1.GatewaySpec{
 					GatewayClassName: gwv1.ObjectName(gc.Name),
-					Listeners:        []gwv1.Listener{{Name: "http", Protocol: gwv1.HTTPProtocolType, Port: 80}},
+					Listeners: []gwv1.Listener{{
+						Name: "https", Protocol: gwv1.HTTPSProtocolType, Port: 443,
+						Hostname: ptrTo(gwv1.Hostname("*.ccbash.cloud")),
+						TLS: &gwv1.ListenerTLSConfig{
+							CertificateRefs: []gwv1.SecretObjectReference{{Name: gwv1.ObjectName("wildcard-tls")}},
+						},
+					}},
 				},
 			}
 			Expect(k8sClient.Create(ctx, gw)).To(Succeed())
+			_, err = reconcileOnce(&GatewayReconciler{Client: k8sClient}, "web")
+			Expect(err).NotTo(HaveOccurred())
+
+			// The Gateway created an owned ReverseProxyCluster: domain/clusterAddress/cert
+			// derived from the listener; private from the params.
+			rpc := &nbv1alpha1.ReverseProxyCluster{}
+			Expect(k8sClient.Get(ctx, client.ObjectKey{Name: "gateway-web", Namespace: ns}, rpc)).To(Succeed())
+			Expect(rpc.Spec.Domain).To(Equal("ccbash.cloud"))
+			Expect(rpc.Spec.ClusterAddress).To(Equal("gate.ccbash.cloud"))
+			Expect(rpc.Spec.CertSecretName).To(Equal("wildcard-tls"))
+			Expect(rpc.Spec.Private).To(BeTrue())
+			Expect(rpc.OwnerReferences).To(HaveLen(1))
+			Expect(rpc.OwnerReferences[0].Name).To(Equal("web"))
+
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(gw), gw)).To(Succeed())
+			Expect(meta.IsStatusConditionTrue(gw.Status.Conditions, string(gwv1.GatewayConditionAccepted))).To(BeTrue())
 
 			route := &gwv1.HTTPRoute{
 				ObjectMeta: metav1.ObjectMeta{Name: "infisical", Namespace: ns},
@@ -601,7 +633,6 @@ var _ = Describe("LoadBalancer-IP translation", func() {
 				},
 			}
 			Expect(k8sClient.Create(ctx, route)).To(Succeed())
-
 			_, err = reconcileOnce(&HTTPRouteReconciler{Client: k8sClient}, "infisical")
 			Expect(err).NotTo(HaveOccurred())
 

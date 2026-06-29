@@ -320,6 +320,12 @@ func setupControllers(mgr ctrl.Manager, netbirdAPIKey, managementURL, netbirdCli
 		if err := (&controller.GatewayClassReconciler{Client: mgr.GetClient()}).SetupWithManager(mgr); err != nil {
 			return fmt.Errorf("setup GatewayClass controller: %w", err)
 		}
+		if err := (&controller.GatewayReconciler{
+			Client:   mgr.GetClient(),
+			Recorder: mgr.GetEventRecorderFor("gateway"),
+		}).SetupWithManager(mgr); err != nil {
+			return fmt.Errorf("setup Gateway controller: %w", err)
+		}
 		if err := (&controller.HTTPRouteReconciler{
 			Client:   mgr.GetClient(),
 			Recorder: mgr.GetEventRecorderFor("httproute"),
