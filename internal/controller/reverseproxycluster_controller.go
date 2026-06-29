@@ -309,7 +309,15 @@ func (r *ReverseProxyClusterReconciler) applyDeployment(ctx context.Context, rpc
 	if rpc.Spec.CertSecretName != "" {
 		container.WithVolumeMounts(corev1ac.VolumeMount().WithName("certs").WithMountPath("/certs").WithReadOnly(true))
 	}
-	podSpec := corev1ac.PodSpec().WithContainers(container)
+	podSpec := corev1ac.PodSpec().
+		WithContainers(container).
+		// ndots:1 so the proxy resolves external FQDNs (pkgs.netbird.io for the
+		// GeoLite2 DB, ACME, etc.) as-is instead of appending the NetBird search
+		// domain kubelet injects — which otherwise hijacks them and breaks egress
+		// (tls: internal error -> no geo DB -> the proxy denies all requests 403).
+		// Cluster names (svc.cluster.local) have >1 dot, so they still resolve.
+		WithDNSConfig(corev1ac.PodDNSConfig().
+			WithOptions(corev1ac.PodDNSConfigOption().WithName("ndots").WithValue("1")))
 	if rpc.Spec.CertSecretName != "" {
 		podSpec.WithVolumes(corev1ac.Volume().WithName("certs").
 			WithSecret(corev1ac.SecretVolumeSource().WithSecretName(rpc.Spec.CertSecretName)))

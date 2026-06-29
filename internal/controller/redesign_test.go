@@ -499,6 +499,9 @@ var _ = Describe("LoadBalancer-IP translation", func() {
 			// Proxy listens on a non-privileged port; HTTP health probes on :8080.
 			Expect(envValue(env, "NB_PROXY_ADDRESS")).To(Equal(":8443"))
 			Expect(envValue(env, "NB_PROXY_PRIVATE")).To(Equal("true")) // embedded peer for NetBird-Only services
+			// ndots:1 so external FQDNs (geo DB, ACME) resolve without the NetBird search domain.
+			Expect(dep.Spec.Template.Spec.DNSConfig).NotTo(BeNil())
+			Expect(dep.Spec.Template.Spec.DNSConfig.Options).To(ContainElement(corev1.PodDNSConfigOption{Name: "ndots", Value: ptrTo("1")}))
 			Expect(dep.Spec.Template.Spec.Containers[0].ReadinessProbe.HTTPGet.Path).To(Equal("/healthz/ready"))
 
 			svc := &corev1.Service{}
