@@ -46,10 +46,11 @@ spec:
     - { name: sieve, port: 4190, targetPort: sieve }
 ---
 # SMTP — L4 (tcp) passthrough. The mail server terminates its own TLS.
-# NetBird allows one service per domain and L4 routes by listen port (no SNI),
-# so each port is a separate CR sharing domain mail.example.com; the operator
-# registers each as tcp-<port>.mail.example.com (see status.serviceDomain) while
-# clients keep using mail.example.com:<port>.
+# NetBird allows one service per domain and L4 routes by listen port (no SNI), so
+# each port is a separate CR sharing domain mail.example.com; the operator
+# registers each under a per-port sibling domain <first-label>-<portName>.<parent>
+# (e.g. mail-smtp.example.com; see status.serviceDomain) while clients keep using
+# mail.example.com:<port>.
 apiVersion: netbird.io/v1alpha1
 kind: ReverseProxyService
 metadata:

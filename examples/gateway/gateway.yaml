@@ -6,15 +6,15 @@
 # HTTPRoute objects.
 #
 # Control advertising by annotating the gateway's namespace (the generated
-# data-plane Service inherits namespace annotations); it picks the network, zone
-# and groups, and can opt out.
+# data-plane Service inherits namespace annotations): set the groups the resource
+# joins, and opt the namespace in/out. The Network and DNS zone are operator
+# config (Helm loadBalancer.network / loadBalancer.dnsZone.domain), not
+# annotations.
 apiVersion: v1
 kind: Namespace
 metadata:
   name: edge
   annotations:
-    netbird.io/network: kube
-    netbird.io/dns-zone: kube
     netbird.io/groups: All
     # netbird.io/advertise: "false"   # opt the whole namespace out
 ---

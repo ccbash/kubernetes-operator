@@ -18,10 +18,12 @@ Install the operator.
 helm upgrade --install --create-namespace -f ./examples/expose/values.yaml -n netbird netbird-operator ./charts/netbird-operator
 ```
 
-Create the `Network`, its `NetworkRouter` and the `DNSZone`. The example reuses
-an existing NetBird group as the routing peers (`peers.group`) — point it at the
-group your nodes' netbird joins, or switch to `peers.deploy: {}` to have the
-operator run a `hostNetwork` netbird-client DaemonSet instead.
+Create the `Network` and its `NetworkRouter`. The example reuses an existing
+NetBird group as the routing peers (`peers.group`) — point it at the group your
+nodes' netbird joins, or switch to `peers.deploy: {}` to have the operator run a
+`hostNetwork` netbird-client DaemonSet instead. (The DNS zone isn't authored
+here — the operator creates and owns it from `loadBalancer.dnsZone.domain` in
+`values.yaml`.)
 
 ```shell
 kubectl apply -f ./examples/expose/network.yaml

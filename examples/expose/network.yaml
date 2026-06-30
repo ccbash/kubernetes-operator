@@ -21,15 +21,5 @@ spec:
   networkRef: { name: kube, namespace: netbird }
   peers:
     group: { name: kube-nodes }
----
-# The DNS zone the operator publishes per-service records into. Adopted by name
-# if it already exists in NetBird.
-apiVersion: netbird.io/v1alpha1
-kind: DNSZone
-metadata:
-  name: kube
-  namespace: netbird
-spec:
-  name: kube.example.com
-  domain: kube.example.com
-  # distributionGroups: [ { name: All } ]   # who can resolve the records
+# Note: the DNS zone is NOT authored here. The operator creates and owns it from
+# the Helm value loadBalancer.dnsZone.domain (see values.yaml).
