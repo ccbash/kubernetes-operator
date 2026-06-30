@@ -34,7 +34,8 @@ Two reachability paths come for free and coexist:
 
 ## Deploy
 
-Set up the `Network`, `NetworkRouter` and `DNSZone` first (see
+Set up the `Network` and `NetworkRouter`, and configure the operator's
+`loadBalancer.network` / `loadBalancer.dnsZone.domain` first (see
 [`../expose`](../expose/README.md)), then:
 
 ```shell

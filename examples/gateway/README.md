@@ -33,10 +33,11 @@ kubectl apply -f ./examples/gateway/gateway.yaml
 1. The gateway controller sees the `Gateway` and provisions a data-plane
    `Service type=LoadBalancer` (its name is implementation-specific), and your
    LB/IPAM gives it an ingress IP.
-2. That Service is advertised by the operator — **default-on**, picking up the
-   `netbird.io/network` / `dns-zone` / `groups` annotations from the `edge`
-   namespace here — so the Gateway gets a `NetworkResource` + dualstack
-   `DNSRecord` at `<generated-service>-edge.<zone>`.
+2. That Service is advertised by the operator — **default-on**, honoring the
+   `netbird.io/groups` (and `netbird.io/advertise`) annotation from the `edge`
+   namespace here; the Network and DNS zone come from operator config — so the
+   Gateway gets a `NetworkResource` + dualstack `DNSRecord` at
+   `<generated-service>-edge.<zone>`.
 3. `HTTPRoute`s attached to the Gateway route by host/path to backends. Mesh
    peers hit the Gateway's advertised name on `:80`/`:443`; the Gateway does the
    rest. The operator never looks at the routes.

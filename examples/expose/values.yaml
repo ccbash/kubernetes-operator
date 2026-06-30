@@ -6,6 +6,16 @@ netbirdAPI:
     name: "netbird-mgmt-api-key"
     key: "NB_API_KEY"
 
+# The LoadBalancer-advertise config: which NetBird Network advertised Services
+# attach to, and the DNS zone the operator creates and owns for their records.
+# These are operator config (not per-namespace annotations).
+loadBalancer:
+  network: kube                    # the Network CR authored in network.yaml
+  dnsZone:
+    domain: kube.example.com       # operator creates+owns this DNSZone
+    distributionGroups: [ All ]    # NetBird groups whose peers can resolve it
+  # resourceGroups: my-group       # groups advertised resources join (for access policies)
+
 operator:
   image:
     tag: dev
